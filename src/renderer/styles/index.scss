@@ -1,0 +1,18 @@
+// Variables first
+@use './variables' as *;
+
+// Global structure
+@use './layout';
+@use './locale_selector';
+
+// Features / pages
+@use './osx_buttons';
+@use './win_buttons';
+@use './update';
+@use './error';
+@use './main';
+@use './complete';
+@use './breaking_changes';
+
+// Add Tailwind CSS support
+@use "tailwindcss";

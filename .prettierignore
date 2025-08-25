@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+releases/
+tmp/
+src-cov/
+*.log
+*.asar
+public/translations/
+shared/data/
+tests/fixtures/

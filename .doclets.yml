@@ -2,4 +2,4 @@ dir: src
 packageJson: package.json
 branches:
   - master
-  - rewrite
+  - rework

@@ -1,0 +1,18 @@
+@use './variables' as *;
+
+.locale_selector {
+  select {
+    background: $background_color;
+    color: $text_color;
+    border: 1px solid scale($background_color, 11.135371179%);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+
+    option {
+      background: $background_color;
+      color: $text_color;
+    }
+  }
+}

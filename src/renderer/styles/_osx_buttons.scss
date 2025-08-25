@@ -1,0 +1,49 @@
+@use 'variables' as *;
+
+.osx_buttons {
+  img {
+    height: 12px;
+    position: fixed;
+    visibility: hidden;
+    width: 12px;
+    -webkit-app-region: no-drag; // allow clicking
+  }
+
+  &:hover img {
+    visibility: visible;
+    -webkit-filter: brightness(92%);
+    filter: brightness(92%);
+  }
+
+  .clickable_div {
+    height: 14px;
+    width: 14px;
+    -webkit-app-region: no-drag;
+  }
+
+  .sys_button {
+    border-radius: 50%;
+    color: black;
+    cursor: default;
+    height: 12px;
+    margin-left: 5px;
+    position: absolute;
+    top: 8px;
+    width: 12px;
+    -webkit-app-region: no-drag; // ensure buttons remain clickable on draggable header
+  }
+
+  .close {
+    background: $osx-close;
+    left: $osx-first;
+  }
+  .minimize {
+    background: $osx-minimize;
+    left: $osx-second;
+  }
+  .maximize {
+    opacity: 0.4;
+    background: $osx-maximize;
+    left: $osx-third;
+  }
+}

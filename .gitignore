@@ -1,15 +1,15 @@
 node_modules/
 releases/
-dev/
 bower_components/
 tmp/
 cache/
 coverage/
 src-cov/
+dist/
+.vscode/
 
 *.asar
 *.log
-*.marko.js
 
 download.txt
 exit.code

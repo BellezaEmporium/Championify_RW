@@ -1,0 +1,18 @@
+// Sass modules (variables, partials, etc.)
+@use 'variables' as *;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Put body/background inside base layer so it isn’t reset by preflight */
+
+html,
+body {
+  @apply bg-cover bg-center min-h-screen min-w-full;
+  background-image: url('../img/background.png') !important;
+  background-color: #1a1a1a !important;
+  font-family: 'Lato', sans-serif !important;
+  color: $text_color !important;
+  overflow: hidden !important;
+  user-select: none !important;
+}
