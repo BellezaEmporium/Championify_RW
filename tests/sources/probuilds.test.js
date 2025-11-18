@@ -37,6 +37,7 @@ async function testWithFixture(fixture) {
   }
   expect(results).toBeDefined();
   expect(results).toEqual(RESULTS_FIXTURES[fixture]);
+  return results;
 }
 
 describe('src/sources/probuilds', () => {
@@ -114,78 +115,78 @@ describe('src/sources/probuilds', () => {
             json: () => Promise.resolve(RESPONSES_FIXTURES.champ_builds),
           });
       });
-
       it('should default item sets', async () => {
-        await testWithFixture('ahri_result_default');
+        const results = await testWithFixture('ahri_result_default');
+        expect(results).toBeDefined();
       });
-
       it('should split item sets', async () => {
         store.set('settings', { splititems: true });
-        await testWithFixture('ahri_result_splititems');
+        const results = await testWithFixture('ahri_result_splititems');
+        expect(results).toBeDefined();
       });
-
       it('should with item sets locked to Summoners Rift map', async () => {
         store.set('settings', { locksr: true });
-        await testWithFixture('ahri_result_locksr');
+        const results = await testWithFixture('ahri_result_locksr');
+        expect(results).toBeDefined();
       });
-
       it('should with shorthanded skills', async () => {
         store.set('settings', {
           consumables: true,
           consumables_position: 'beginning',
           skillsformat: true,
         });
-        await testWithFixture('ahri_result_shorthand');
+        const results = await testWithFixture('ahri_result_shorthand');
+        expect(results).toBeDefined();
       });
-
       it('should with consumables enabled and at the beginning', async () => {
         store.set('settings', {
           consumables: true,
           consumables_position: 'beginning',
         });
-        await testWithFixture('ahri_result_consumables_beginning');
+        const results = await testWithFixture('ahri_result_consumables_beginning');
+        expect(results).toBeDefined();
       });
-
       it('should with consumables enabled and at the end', async () => {
         store.set('settings', {
           consumables: true,
           consumables_position: 'end',
         });
-        await testWithFixture('ahri_result_consumables_end');
+        const results = await testWithFixture('ahri_result_consumables_end');
+        expect(results).toBeDefined();
       });
-
       it('should with trinkets enabled and at the beginning', async () => {
         store.set('settings', {
           trinkets: true,
           trinkets_position: 'beginning',
         });
-        await testWithFixture('ahri_result_trinkets_beginning');
+        const results = await testWithFixture('ahri_result_trinkets_beginning');
+        expect(results).toBeDefined();
       });
-
       it('should with trinkets enabled and at the end', async () => {
         store.set('settings', {
           trinkets: true,
           trinkets_position: 'end',
         });
-        await testWithFixture('ahri_result_trinkets_end');
+        const results = await testWithFixture('ahri_result_trinkets_end');
+        expect(results).toBeDefined();
       });
-
       it('should with consumables enabled and split item sets', async () => {
         store.set('settings', {
           splititems: true,
           consumables: true,
           consumables_position: 'beginning',
         });
-        await testWithFixture('ahri_result_splititems_consumables');
+        const results = await testWithFixture('ahri_result_splititems_consumables');
+        expect(results).toBeDefined();
       });
-
       it('should with trinkets enabled and split item sets', async () => {
         store.set('settings', {
           splititems: true,
           trinkets: true,
           trinkets_position: 'beginning',
         });
-        await testWithFixture('ahri_result_splititems_trinkets');
+        const results = await testWithFixture('ahri_result_splititems_trinkets');
+        expect(results).toBeDefined();
       });
     });
   });

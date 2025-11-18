@@ -1,0 +1,68 @@
+import locales from './_locales.marko';
+import main_page from './main_page.marko';
+
+<header class='flex items-center justify-between px-5 py-3 bg-slate-900/75 backdrop-blur-xl border-b border-white/8 relative'>
+  <if(input.platform === 'darwin')>
+    <div class='flex gap-2'>
+      <div class='clickable_div'>
+        <a href='' class='sys_button close'>
+          <img src='/src/img/osx_buttons/close.png'>
+        </a>
+      </div>
+      <div class='clickable_div'>
+        <a href='' class='sys_button minimize'>
+          <img src='/src/img/osx_buttons/minimize.png'>
+        </a>
+      </div>
+      <a class='sys_button maximize'/>
+    </div>
+  </if>
+  <if(input.platform === 'win32')>
+    <div class='flex gap-2 ml-auto'>
+      <div class='sys_button minimize'>
+        <img src='/src/img/win_buttons/minimize.png'>
+      </div>
+      <div class='sys_button maximize'>
+        <img src='/src/img/win_buttons/maximize.png'>
+      </div>
+      <div class='sys_button close'>
+        <img src='/src/img/win_buttons/x.png'>
+      </div>
+    </div>
+  </if>
+</header>
+
+<locales ...input/>
+
+<div class='w-full'>
+  <div class='text-center px-4 pt-8 pb-4'>
+    <img
+      src='/src/img/logo.png'
+      class='max-w-[220px] w-full mx-auto drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)]'>
+    <div class='h-px bg-white/8 my-6'/>
+  </div>
+</div>
+
+<div
+  id='view'
+  class='max-w-[900px] w-full bg-slate-800/90 mx-auto mb-8 px-10 py-8 rounded-3xl border border-white/8 shadow-[0_20px_40px_rgba(15,23,42,0.45)]'>
+  <main_page ...input/>
+</div>
+
+<footer class='flex items-center justify-between px-5 py-3 bg-slate-900/75 backdrop-blur-xl border-t border-white/8 mt-auto text-sm gap-4'>
+  <div class='flex items-center gap-2'>
+    <a class='text-slate-300 hover:text-white transition-colors flex items-center gap-2'>
+      <i class='heart icon text-base'/>
+      ${' '}Donate
+    </a>
+  </div>
+  <div class='flex items-center gap-2'>
+    <a class='text-slate-300 hover:text-white transition-colors flex items-center gap-2'>
+      <i class='github icon text-base'/>
+      ${' '}BellezaEmporium
+    </a>
+  </div>
+  <div class='championify_version text-slate-400'>
+    <span>v${input.version}</span>
+  </div>
+</footer>

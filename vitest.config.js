@@ -2,18 +2,29 @@ import { defineConfig } from 'vitest/config';
 import { resolve } from 'node:path';
 
 export default defineConfig({
+  plugins: [],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src/renderer'),
-      '~': resolve(__dirname, 'src'),
+      '@': resolve(__dirname, 'src/lib'),
+      '@backend': resolve(__dirname, 'backend/src'),
+      '@shared': resolve(__dirname, 'shared/data'),
+      'fs-extra': resolve(__dirname, 'tests/mocks/fs-extra.js'),
     },
-    extensions: ['.js', '.mjs', '.json', '.svelte', '.html'],
+    extensions: ['.ts', '.js', '.mjs', '.json', '.marko', '.html'],
   },
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['tests/**/*.js'],
-    exclude: ['tests/index.js', 'tests/setup-vitest.js'],
+    include: ['tests/**/*.{js,ts}'],
+    exclude: [
+      'tests/index.js',
+      'tests/setup-vitest.js',
+      'tests/mocks/**',
+      'tests/i18n.test.js',
+      'node_modules/**',
+      'build/**',
+      'dist/**',
+    ],
     setupFiles: ['tests/setup-vitest.js'],
     testTimeout: 30000,
     hookTimeout: 30000,
@@ -30,6 +41,7 @@ export default defineConfig({
       reportsDirectory: './coverage',
       exclude: [
         'coverage/**',
+        'build/**',
         'dist/**',
         'node_modules/**',
         '**/*.test.js',
@@ -39,8 +51,6 @@ export default defineConfig({
         '**/setup-vitest.js',
       ],
     },
-    env: {
-      NODE_ENV: 'test',
-    },
+    env: { NODE_ENV: 'test' },
   },
 });

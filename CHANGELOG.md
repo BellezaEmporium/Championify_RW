@@ -3,7 +3,7 @@
 <a name="3.0.0" />
 ## 3.0.0 (2025)
 
-This release brings a complete overhaul of the Championify codebase and a Node.js bump. While this is a WIP, it aims at improving performance, maintainability, and user experience.
+This release brings a complete overhaul of the Championify codebase and a Node.js bump. While this is a WIP (for now), it aims at improving performance, maintainability, and user experience.
 No release date for the moment.
 
 #### Novelties
@@ -11,12 +11,11 @@ No release date for the moment.
 - Entire rework of Championify with Node 20/22+
 - Ditched Bluebird for native Node promises
 - Using native fetch instead of request, which was deprecated a long time ago
-- Switched from Marko to Svelte
-- Boost up compilation time with the usage of Electron-Vite
+- Boost up compilation time with the usage of Vite
 - Added Vitest to uniformize the testing framework
 - Ditch Semantic-UI & jQuery for Tailwind CSS
-- i18n translation is carried by svelte-i18n, flag icons by svelte-flag-icons
 - Add U.gg as the (now) fourth source
+- Moved from Electron to Tauri for a lighter desktop app
 
 #### Bug Fixes
 

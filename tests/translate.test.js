@@ -1,38 +1,37 @@
-const T = require(`../${global.src_path}/translate`).default;
+import { describe, it, beforeAll, afterAll } from 'vitest';
+import { expect } from 'chai';
+import T from '../backend/src/translate.js';
 
-const should = require('chai').should();
-
-describe('src/translate', () => {
-  before(() => {
-    T.loadPhrases('ko');
+describe('backend/translate (migration)', () => {
+  beforeAll(async () => {
+    await T.loadPhrases('ko');
   });
 
-  after(() => {
-    T.loadPhrases('en');
+  afterAll(async () => {
+    await T.loadPhrases('en');
   });
 
-  it('should the set locale', () => {
-    T.locale.should.equal('ko');
+  it('définit bien la locale', () => {
+    expect(T.locale).to.equal('ko');
   });
 
-  it('should merge phrases', () => {
-    T.merge({test_phrase: '123'});
-    T.t('test_phrase').should.equal('123');
+  it('merge les phrases', () => {
+    T.merge({ test_phrase: '123' });
+    expect(T.t('test_phrase')).to.equal('123');
   });
 
-  it('should throw an error when a phrase doesn\'t exist', () => {
+  it('retourne une fallback quand une phrase n\'existe pas', () => {
+    const val = T.t('phrase_inexistante_xyz');
+    expect(val).to.be.a('string');
+  });
+
+  it('lève une erreur quand une langue n\'existe pas', async () => {
+    let threw = false;
     try {
-      T.t('blahblah');
-    } catch (err) {
-      should.exist(err);
+      await T.loadPhrases('klingon');
+    } catch {
+      threw = true;
     }
-  });
-
-  it('should throw an error when a language doesn\'t exist', () => {
-    try {
-      T.loadPhrases('klingon');
-    } catch (err) {
-      should.exist(err);
-    }
+    expect(threw).to.be.true;
   });
 });

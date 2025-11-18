@@ -1,0 +1,52 @@
+import { defineConfig } from 'i18next-cli';
+
+/** @type {import('i18next-cli').I18nextToolkitConfig} */
+export default defineConfig({
+  locales: [
+    'ar',
+    'bg',
+    'bs',
+    'ca',
+    'cs',
+    'da',
+    'de',
+    'el',
+    'en',
+    'es',
+    'fi',
+    'fr',
+    'he',
+    'hi',
+    'hr',
+    'hu',
+    'id',
+    'it',
+    'ja',
+    'ka',
+    'km',
+    'ko',
+    'lt',
+    'lv',
+    'ms',
+    'nl',
+    'no',
+    'pl',
+    'pt-BR',
+    'pt',
+    'ro',
+    'ru',
+    'sk',
+    'sl',
+    'sr',
+    'sv',
+    'th',
+    'tr',
+    'vi',
+    'zh-CN',
+    'zh-TW',
+  ],
+  extract: {
+    input: '(src/**/*.{js,marko})',
+    output: '(src/translations/*.json)'
+  }
+});

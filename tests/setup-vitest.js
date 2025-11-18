@@ -9,48 +9,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 global.__dirname = __dirname;
 global.__filename = fileURLToPath(import.meta.url);
 
-// Mock Electron modules before any other imports that might use them
-vi.mock('electron', () => ({
-  app: {
-    getPath: vi.fn(path => {
-      const paths = {
-        userData: path.join(__dirname, '..', 'tmp', 'userData'),
-        appData: path.join(__dirname, '..', 'tmp', 'appData'),
-        home: path.join(__dirname, '..', 'tmp', 'home'),
-        temp: path.join(__dirname, '..', 'tmp'),
-      };
-      return paths[path] || '/mock/path';
-    }),
-    getVersion: vi.fn(() => '3.0.0'),
-    getName: vi.fn(() => 'Championify'),
-    quit: vi.fn(),
-  },
-  ipcRenderer: {
-    on: vi.fn(),
-    once: vi.fn(),
-    removeListener: vi.fn(),
-    removeAllListeners: vi.fn(),
-    send: vi.fn(),
-    invoke: vi.fn(() => Promise.resolve()),
-  },
-  shell: {
-    openExternal: vi.fn(() => Promise.resolve()),
-    showItemInFolder: vi.fn(),
-  },
-  clipboard: {
-    readText: vi.fn(() => ''),
-    writeText: vi.fn(),
-  },
-  dialog: {
-    showMessageBox: vi.fn(() => Promise.resolve({ response: 0 })),
-    showOpenDialog: vi.fn(() => Promise.resolve({ canceled: false, filePaths: [] })),
-    showSaveDialog: vi.fn(() => Promise.resolve({ canceled: false, filePath: '' })),
-  },
-  nativeTheme: {
-    shouldUseDarkColors: false,
-  },
-}));
-
 // Mock fs-extra
 vi.mock('fs-extra', async () => {
   const actual = await vi.importActual('fs-extra');
@@ -74,8 +32,10 @@ vi.mock('nock', () => {
     reply: vi.fn().mockReturnThis(),
     persist: vi.fn().mockReturnThis(),
   }));
-  mockNock.cleanAll = vi.fn();
-  return { default: mockNock };
+  // Add cleanAll as a property of the mock function
+  return {
+    default: Object.assign(mockNock, { cleanAll: vi.fn() }),
+  };
 });
 
 // Mock msw for modern HTTP testing
@@ -99,7 +59,12 @@ vi.mock('msw', () => ({
 }));
 
 // Configure src path used by tests
-global.src_path = process.env.COVERAGE ? 'src-cov/renderer/src' : 'src/renderer/src';
+globalThis.src_path = 'backend/src'; // Use globalThis for clarity
+// @ts-ignore
+globalThis.src_path = 'backend/src';
+
+// Minimal mock electronAPI for window dependent code
+global.window = global.window || {};
 
 // Load and merge champion translations if fixtures exist
 let translationsLoaded = false;
@@ -145,13 +110,15 @@ beforeAll(async () => {
 });
 
 // Mock fetch globally
-global.fetch = vi.fn(() =>
-  Promise.resolve({
-    ok: true,
-    json: () => Promise.resolve({}),
-    text: () => Promise.resolve(''),
-  })
-);
+global.fetch = vi.fn((_input, _init) => {
+  return Promise.resolve(
+    new Response('', {
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+    })
+  );
+});
 
 // If a global coverage object is attached to window by other libs, write it
 // after tests finish to the standard coverage location

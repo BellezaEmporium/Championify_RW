@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.9.1",
+  "productName": "Championify",
+  "version": "3.0.0",
+  "identifier": "com.championify.dev",
+  "build": {
+    "beforeDevCommand": "yarn dev",
+    "beforeBuildCommand": "yarn build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Championify",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "externalBin": [],
+    "copyright": "© 2025 Dustin Blackman; Ismaël Moret",
+    "category": "Game",
+    "shortDescription": "Downloads League of Legends builds and imports them into the game",
+    "longDescription": "Championify is a tool that automatically downloads and imports League of Legends champion builds from popular sources directly into the game."
+  }
+}
+

@@ -1,17 +1,12 @@
 node_modules/
 releases/
-bower_components/
 tmp/
 cache/
 coverage/
-src-cov/
 dist/
 .vscode/
+.svelte-kit/
+build/
 
 *.asar
 *.log
-
-download.txt
-exit.code
-test.coffee
-test.sh

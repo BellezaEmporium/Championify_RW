@@ -1,10 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-
-let optionsParser;
-
-beforeEach(async () => {
-  optionsParser = (await import(`../${globalThis.src_path}/options_parser.js`)).default;
-});
+import { describe, it, expect } from 'vitest';
+import optionsParser from '../backend/src/options_parser.js';
 
 describe('src/options_parser', () => {
   describe('import', () => {

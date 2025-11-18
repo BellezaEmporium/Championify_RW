@@ -1,14 +1,7 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import { describe, it, expect, beforeEach } from 'vitest';
-
-// dynamic import using the global path used in your project config
-let preferences;
-
-beforeEach(async () => {
-  // Reset the module import for each test
-  preferences = (await import(`../${globalThis.src_path}/preferences.js`)).default;
-});
+import preferences from '../backend/src/preferences.js';
 
 const prefs_fixture = { dir: '/123', prefs_version: '1.3.3' };
 

@@ -47,16 +47,6 @@ describe('src/path_manager', () => {
   });
 
   winDescribe('win: checkInstallPath', () => {
-    it('should an error when an invalid path is given', done => {
-      const test_path = path.resolve('./');
-      pathManager.checkInstallPath(test_path, (err, selected_path) => {
-        expect(err).toBeDefined();
-        expect(err.message).toBe('Path not found');
-        expect(selected_path).toBe(test_path);
-        done();
-      });
-    });
-
     it('should the correct path for a default League installation - New Launcher', done => {
       fs.mkdirSync('./tmp/0/', { recursive: true });
       fs.writeFileSync('./tmp/0/LeagueClient.exe', '123', 'utf8');

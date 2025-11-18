@@ -1,0 +1,161 @@
+@import 'tailwindcss';
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/lato.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+  --color-background: #0f172a;
+  --color-surface: #1e293b;
+  --color-surface-elevated: #24324a;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-text: #f8fafc;
+  --color-text-muted: #94a3b8;
+  --color-primary: #38bdf8;
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-accent: #f472b6;
+  font-family: 'Lato', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(23, 37, 84, 0.92) 70%),
+    url('/background.png') center/cover fixed;
+  color: var(--color-text);
+  min-height: 100vh;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Custom classes pour compatibilité JavaScript */
+.hidden {
+  display: none !important;
+}
+
+.item.active {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Icônes Semantic UI (gardées pour compatibilité) */
+.icon {
+  display: inline-block;
+  opacity: 1;
+  margin: 0;
+  width: 1em;
+  height: 1em;
+  font-family: Icons;
+  font-style: normal;
+  font-weight: 400;
+  text-decoration: inherit;
+  text-align: center;
+  speak: none;
+  font-smoothing: antialiased;
+}
+
+/* Drapeaux (gardés pour le sélecteur de langue) */
+.flag {
+  display: inline-block;
+  width: 16px;
+  height: 11px;
+  line-height: 11px;
+  vertical-align: baseline;
+  margin: 0;
+  text-decoration: inherit;
+  speak: none;
+  font-smoothing: antialiased;
+  backface-visibility: hidden;
+}
+
+/* Classes custom spécifiques au projet */
+.sys_button {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.sys_button:hover {
+  opacity: 0.7;
+}
+
+.clickable_div {
+  cursor: pointer;
+}
+
+.locale_selector .menu {
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.locale_selector .menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.locale_selector .menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.locale_selector .menu::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+}
+
+.sourceicon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.progresslog {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.progresslog::-webkit-scrollbar {
+  width: 6px;
+}
+
+.progresslog::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.progresslog::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+}
+
+/* Messages d'erreur/succès */
+.lol_dir_input_msg .red {
+  color: #fca5a5;
+}
+
+.lol_dir_input_msg .green {
+  color: #86efac;
+}
+
+.lol_dir_input_msg .yellow {
+  color: #fde68a;
+}
+
+/* Responsive */
+@media (max-width: 860px) {
+  .locale_selector {
+    position: static !important;
+    justify-content: flex-start;
+    margin: 0 1rem 1rem;
+  }
+}
+

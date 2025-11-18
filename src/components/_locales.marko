@@ -1,0 +1,265 @@
+<div
+  style="${input.platform === 'win32' ? 'left: 10px;' : 'right: 3px;'}"
+  class='absolute top-4 z-20 flex justify-end locale_selector'>
+  <div id='locals_select' class='relative'>
+    <input type='hidden' name='locale'>
+    <button class='flex items-center gap-2 px-4 py-2 bg-slate-800/90 border border-white/8 rounded-xl hover:bg-slate-700/90 transition-colors'>
+      <i id='locale_flag' class='text-lg'/>
+      <i class='dropdown icon text-slate-400'/>
+    </button>
+    <div class='menu absolute top-full mt-2 bg-slate-900/95 border border-white/8 rounded-2xl shadow-2xl overflow-hidden hidden max-h-80 overflow-y-auto ${input.platform === "win32" ? "left-0" : "right-0"} min-w-[200px]'>
+      <div class='px-4 py-3 border-b border-white/8 flex items-center gap-2'>
+        <i class='world icon text-sky-400'/>
+        <span id='select_language_text' class='font-semibold text-white'>
+          $!{input.t('select_language')}
+        </span>
+      </div>
+      <div
+        data-value='en'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='gb flag'/>
+        ${' '}English
+      </div>
+      <div
+        data-value='id'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='id flag'/>
+        ${' '}Bahasa Indonesia
+      </div>
+      <div
+        data-value='bs'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='ba flag'/>
+        ${' '}Bosanski
+      </div>
+      <div
+        data-value='ca'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='es flag'/>
+        ${' '}Català
+      </div>
+      <div
+        data-value='cs'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='cz flag'/>
+        ${' '}čeština
+      </div>
+      <div
+        data-value='da'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='dk flag'/>
+        ${' '}Danske
+      </div>
+      <div
+        data-value='de'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='de flag'/>
+        ${' '}Deutsch
+      </div>
+      <div
+        data-value='es'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='es flag'/>
+        ${' '}Español
+      </div>
+      <div
+        data-value='fr'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='fr flag'/>
+        ${' '}Français
+      </div>
+      <div
+        data-value='hr'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='hr flag'/>
+        ${' '}Hrvatska
+      </div>
+      <div
+        data-value='it'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='it flag'/>
+        ${' '}Italiano
+      </div>
+      <div
+        data-value='lv'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='lv flag'/>
+        ${' '}Latvijā
+      </div>
+      <div
+        data-value='lt'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='lt flag'/>
+        ${' '}Lietuvos
+      </div>
+      <div
+        data-value='hu'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='hu flag'/>
+        ${' '}Magyar
+      </div>
+      <div
+        data-value='ms'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='my flag'/>
+        ${' '}Melayu
+      </div>
+      <div
+        data-value='nl'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='nl flag'/>
+        ${' '}Nederlandse
+      </div>
+      <div
+        data-value='no'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='no flag'/>
+        ${' '}Norsk
+      </div>
+      <div
+        data-value='pl'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='pl flag'/>
+        ${' '}Polski
+      </div>
+      <div
+        data-value='pt'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='pt flag'/>
+        ${' '}Português
+      </div>
+      <div
+        data-value='pt-BR'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='br flag'/>
+        ${' '}Português Brasileiro
+      </div>
+      <div
+        data-value='ro'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='ro flag'/>
+        ${' '}Român
+      </div>
+      <div
+        data-value='sl'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='si flag'/>
+        ${' '}Slovenščina
+      </div>
+      <div
+        data-value='sk'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='sk flag'/>
+        ${' '}Slovenský
+      </div>
+      <div
+        data-value='sr'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='rs flag'/>
+        ${' '}Srpski
+      </div>
+      <div
+        data-value='fi'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='fi flag'/>
+        ${' '}Suomi
+      </div>
+      <div
+        data-value='sv'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='se flag'/>
+        ${' '}Svenska
+      </div>
+      <div
+        data-value='vi'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='vn flag'/>
+        ${' '}Tiếng Việt
+      </div>
+      <div
+        data-value='tr'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='tr flag'/>
+        ${' '}Türk
+      </div>
+      <div
+        data-value='ar'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='eg flag'/>
+        ${' '}العربية
+      </div>
+      <div
+        data-value='bg'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='bg flag'/>
+        ${' '}български
+      </div>
+      <div
+        data-value='zh-CN'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='cn flag'/>
+        ${' '}简体中文
+      </div>
+      <div
+        data-value='zh-TW'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='tw flag'/>
+        ${' '}繁體中文
+      </div>
+      <div
+        data-value='ka'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='ge flag'/>
+        ${' '}ქართული
+      </div>
+      <div
+        data-value='el'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='gr flag'/>
+        ${' '}Ελληνικά
+      </div>
+      <div
+        data-value='he'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='il flag'/>
+        ${' '}עברית
+      </div>
+      <div
+        data-value='hi'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='in flag'/>
+        ${' '}हिंदी
+      </div>
+      <div
+        data-value='ja'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='jp flag'/>
+        ${' '}日本語
+      </div>
+      <div
+        data-value='km'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='kh flag'/>
+        ${' '}ភាសាខ្មែរ
+      </div>
+      <div
+        data-value='ko'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='kr flag'/>
+        ${' '}한국어
+      </div>
+      <div
+        data-value='ru'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='ru flag'/>
+        ${' '}русский
+      </div>
+      <div
+        data-value='th'
+        class='px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors item'>
+        <i class='th flag'/>
+        ${' '}ภาษาไทย
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,23 +1,26 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
     "allowJs": true,
     "checkJs": false,
-    "strict": false,
-    "noEmit": true,
-    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowSyntheticDefaultImports": true,
+    "noEmit": true,
     "types": ["vitest/globals", "node", "jsdom"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/renderer/*"],
-      "~/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@backend/*": ["backend/src/*"],
+      "@shared/*": ["shared/data/*"]
     }
   },
-  "include": ["src/**/*", "tests/**/*", "vitest.config.js"],
-  "exclude": ["node_modules", "dist", "coverage", "tmp"]
+  "include": ["src/**/*", "tests/**/*", "backend/src/**/*", "shared/**/*", "vitest.config.js"],
+  "exclude": ["node_modules", "dist", "coverage", "tmp", "build"]
 }

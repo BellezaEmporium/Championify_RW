@@ -1,21 +1,14 @@
 import * as R from 'ramda';
 import fs from 'fs-extra';
 import path from 'path';
-import sinon from 'sinon';
 import { afterAll } from 'vitest';
+import T from '../backend/src/translate.js';
+import '../backend/src/store.js';
+import { describe, it, expect } from 'vitest';
 
-// set src path like before
-globalThis.src_path = process.env.COVERAGE ? 'src-cov' : 'src';
-
-// import your modules (top-level await allowed in Vitest setup files)
-// adjust paths/extensions if needed
-const T = (await import(`../${globalThis.src_path}/translate`)).default;
-await import(`../${globalThis.src_path}/store`);
-
-// provide a window/$ shim (Vitest uses jsdom by default)
 if (typeof globalThis.window === 'undefined') globalThis.window = globalThis;
-globalThis.$ = sinon.stub();
-globalThis.$.withArgs('#cl_progress').returns({ prepend: () => {} });
+// Minimal stub for $('#cl_progress')
+globalThis.$ = sel => ({ prepend: () => {} });
 
 // import fixture JSON
 import championsJson from './fixtures/all_champions.json';
@@ -38,4 +31,10 @@ afterAll(() => {
     fs.ensureDirSync(path.dirname(file_path));
     fs.writeFileSync(file_path, JSON.stringify(globalThis.window.__coverage__));
   }
+});
+
+describe('bootstrap', () => {
+  it('loads translations', () => {
+    expect(typeof T.t).toBe('function');
+  });
 });
