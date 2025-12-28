@@ -110,6 +110,22 @@
   "import_builds": "Import builds",
   "confirm_delete": "Confirm Delete",
   "confirm_delete_message": "Are you sure you want to delete all item sets?",
-  "cancel": "Cancel"
+  "cancel": "Cancel",
+  "select_sources": "Select sources",
+  "sources_selected": "{{count}} source selected",
+  "sources_selected_plural": "{{count}} sources selected",
+  "inputs.browse_title_macos": "Select League of Legends.app",
+  "inputs.browse_title_default": "Select League of Legends directory",
+  "inputs.install_path_placeholder": "League of Legends installation path",
+  "options_skillsformat_hint": "(Q>W>E)",
+  "versions.local_items_label": "Local Item Sets Version:",
+  "versions.lol_label": "LoL Version:",
+  "versions.source_label": "{{source}} Version:",
+  "branding.logo_alt": "Championify logo",
+  "footer.donate": "Donate",
+  "footer.github_name": "BellezaEmporium",
+  "footer.version": "v{{version}}",
+  "window_controls.close": "Close window",
+  "window_controls.minimize": "Minimize window",
+  "window_controls.maximize": "Maximize window"
 }
-

@@ -196,6 +196,7 @@ impl Preferences {
     }
     
     /// Update a specific preference field
+    #[allow(dead_code)]
     pub fn update_field(&mut self, field: &str, value: serde_json::Value) -> Result<()> {
         match field {
             "locale" => {

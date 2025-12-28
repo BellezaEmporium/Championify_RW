@@ -2,6 +2,7 @@
 use thiserror::Error;
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)] // Variants for future use
 #[derive(Error, Debug)]
 pub enum ChampionifyError {
     #[error("Network error: {0}")]
@@ -38,6 +39,7 @@ impl From<reqwest::Error> for ChampionifyError {
 pub type Result<T> = std::result::Result<T, ChampionifyError>;
 
 /// Error response for frontend
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ErrorResponse {
     pub code: String,

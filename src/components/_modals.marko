@@ -1,42 +1,45 @@
-<!-- Delete Confirmation Modal -->
-<div
-  id='delete_confirmation_modal'
-  class='fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 hidden modal_backdrop'>
+<i18n-var|i18n|>
+  <!-- Delete Confirmation Modal -->
   <div
-    class='bg-slate-800 rounded-3xl border border-white/8 shadow-2xl p-8 max-w-md w-full mx-4'
-    onclick='event.stopPropagation()'>
-    <div class='text-xl font-semibold text-white mb-4'>
-      $!{input.t('confirm_delete')}
-    </div>
-    <div class='text-slate-300 mb-6'>
-      $!{input.t('confirm_delete_message')}
-    </div>
-    <div class='flex gap-3'>
-      <button
-        id='cancel_delete'
-        class='flex-1 bg-slate-700 text-white px-6 py-2.5 rounded-full font-semibold hover:bg-slate-600 transition-colors'>
-        $!{input.t('cancel')}
-      </button>
-      <button
-        id='confirm_delete'
-        class='flex-1 bg-gradient-to-br from-red-600 to-red-500 text-white px-6 py-2.5 rounded-full font-semibold hover:shadow-[0_10px_24px_rgba(239,68,68,0.35)] transition-all'>
-        $!{input.t('delete')}
-      </button>
-    </div>
-  </div>
-</div>
-<!-- Delete Progress Modal -->
-<div
-  id='delete_notification'
-  class='fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 hidden'>
-  <div class='bg-slate-800 rounded-3xl border border-white/8 shadow-2xl p-8 max-w-md w-full mx-4'>
-    <div class='text-xl font-semibold text-white mb-6'>
-      $!{input.t('deleting_old_builds')}
-    </div>
-    <div class='flex justify-center items-center py-8'>
-      <div id='progress-icon' class='flex justify-center'>
-        <div class='w-16 h-16 border-4 border-sky-400 border-t-transparent rounded-full animate-spin'/>
+    id='delete_confirmation_modal'
+    class='fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 hidden modal_backdrop'>
+    <div
+      class='bg-slate-800 rounded-3xl border border-white/8 shadow-2xl p-8 max-w-md w-full mx-4'
+      @click.stop>
+      <div class='text-xl font-semibold text-white mb-4'>
+        <i18n-message key='confirm_delete'/>
+      </div>
+      <div class='text-slate-300 mb-6'>
+        <i18n-message key='confirm_delete_message'/>
+      </div>
+      <div class='flex gap-3'>
+        <button
+          id='cancel_delete'
+          class='flex-1 bg-slate-700 text-white px-6 py-2.5 rounded-full font-semibold hover:bg-slate-600 transition-colors'>
+          <i18n-message key='cancel'/>
+        </button>
+        <button
+          id='confirm_delete'
+          class='flex-1 bg-gradient-to-br from-red-600 to-red-500 text-white px-6 py-2.5 rounded-full font-semibold hover:shadow-[0_10px_24px_rgba(239,68,68,0.35)] transition-all'>
+          <i18n-message key='delete'/>
+        </button>
       </div>
     </div>
   </div>
-</div>
+
+  <!-- Delete Progress Modal -->
+  <div
+    id='delete_notification'
+    class='fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 hidden'>
+    <div class='bg-slate-800 rounded-3xl border border-white/8 shadow-2xl p-8 max-w-md w-full mx-4'>
+      <div class='text-xl font-semibold text-white mb-6'>
+        <i18n-message key='deleting_old_builds'/>
+      </div>
+      <div class='flex justify-center items-center py-8'>
+        <div id='progress-icon' class='flex justify-center'>
+          <div class='w-16 h-16 border-4 border-sky-400 border-t-transparent rounded-full animate-spin'/>
+        </div>
+      </div>
+    </div>
+  </div>
+</i18n-var>

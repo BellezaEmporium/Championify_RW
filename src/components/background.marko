@@ -1,0 +1,11 @@
+$ {
+  const bgStyle = input.mode === 'image' && input.src 
+    ? `background-image: url(${input.src})`
+    : '';
+}
+
+<div class='fixed inset-0 -z-10 overflow-hidden pointer-events-none'>
+  <div
+    class='absolute inset-0 bg-cover bg-center bg-no-repeat'
+    style=bgStyle/>
+</div>

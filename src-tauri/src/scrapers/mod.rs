@@ -10,6 +10,7 @@ pub mod opgg;
 pub mod probuilds;
 pub mod koreanbuilds;
 pub mod trackergg;
+pub mod registry;
 
 // Source registry
 pub static SOURCES: Lazy<HashMap<&'static str, SourceInfo>> = Lazy::new(|| {

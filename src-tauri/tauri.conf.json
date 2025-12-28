@@ -13,15 +13,19 @@
     "windows": [
       {
         "title": "Championify",
-        "width": 800,
-        "height": 600,
+        "width": 450,
+        "height": 670,
+        "minWidth": 450,
+        "minHeight": 670,
         "resizable": true,
         "fullscreen": false,
         "center": true,
-        "decorations": true,
+        "decorations": false,
+        "transparent": false,
         "alwaysOnTop": false,
         "skipTaskbar": false,
-        "theme": "Dark"
+        "theme": "Dark",
+        "dragDropEnabled": true
       }
     ],
     "security": {
@@ -46,4 +50,3 @@
     "longDescription": "Championify is a tool that automatically downloads and imports League of Legends champion builds from popular sources directly into the game."
   }
 }
-

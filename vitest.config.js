@@ -20,7 +20,6 @@ export default defineConfig({
       'tests/index.js',
       'tests/setup-vitest.js',
       'tests/mocks/**',
-      'tests/i18n.test.js',
       'node_modules/**',
       'build/**',
       'dist/**',

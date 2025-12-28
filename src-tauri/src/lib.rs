@@ -5,9 +5,9 @@ mod scrapers;
 mod item_sets;
 mod progress;
 
-use preferences::Preferences;
 use progress::ProgressTracker;
 use item_sets::{build_to_item_set, write_item_set, delete_all_builds, count_builds};
+use scrapers::registry;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
+use sys_locale;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ImportPayload {
@@ -44,6 +45,8 @@ struct CountResult {
 }
 
 /// Generic response wrapper for all backend operations
+/// TODO: Use this for standardized API responses
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 struct ApiResponse<T: Serialize> {
     success: bool,
@@ -66,6 +69,11 @@ async fn load_preferences() -> std::result::Result<preferences::PreferencesUI, S
 async fn save_preferences(preferences: preferences::PreferencesUI) -> std::result::Result<(), String> {
     log::info!("Saving preferences from UI");
     preferences::Preferences::save_ui(preferences).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_os_locale() -> std::result::Result<String, String> {
+    Ok(sys_locale::get_locale().unwrap_or_else(|| "en".to_string()))
 }
 
 // ============================================================================
@@ -154,6 +162,12 @@ async fn import_builds(
             }
             "koreanbuilds" => {
                 scrapers::koreanbuilds::get_sr(&client)
+                    .await
+                    .map_err(|e| e.to_string())?
+            }
+            "trackergg" => {
+                // Tracker.gg is not yet implemented - returns empty vector
+                scrapers::trackergg::get_sr(&client)
                     .await
                     .map_err(|e| e.to_string())?
             }
@@ -276,6 +290,42 @@ async fn get_version() -> std::result::Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
 }
 
+/// Get health snapshot for all scrapers
+#[tauri::command]
+async fn get_scraper_statuses() -> std::result::Result<Vec<registry::ScraperStatus>, String> {
+    log::info!("Collecting scraper statuses");
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let statuses = registry::collect_statuses(&client).await;
+    Ok(statuses)
+}
+
+/// Get LoL patch version from OP.GG API (more reliable than local files)
+#[tauri::command]
+async fn get_lol_version() -> std::result::Result<String, String> {
+    log::info!("Fetching LoL version from OP.GG API");
+    
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    match scrapers::opgg::get_version(&client).await {
+        Ok(version) => {
+            log::info!("LoL version: {}", version);
+            Ok(version)
+        }
+        Err(e) => {
+            log::warn!("Failed to get LoL version from API: {}", e);
+            Ok("Unknown".to_string())
+        }
+    }
+}
+
 #[tauri::command]
 async fn get_lol_version_from_path(path: String) -> std::result::Result<String, String> {
     log::info!("Getting LoL version from path: {}", path);
@@ -298,10 +348,12 @@ pub fn run() {
             // Preferences
             load_preferences,
             save_preferences,
+            get_os_locale,
             // Paths
             find_lol_installation,
             get_item_sets_path,
             get_lol_version_from_path,
+            get_lol_version,
             // Import
             import_builds,
             // Build management
@@ -310,6 +362,7 @@ pub fn run() {
             // Info
             get_available_sources,
             get_version,
+            get_scraper_statuses,
         ]);
 
     builder

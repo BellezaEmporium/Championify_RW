@@ -22,10 +22,11 @@ export const sources_info = [
     name: 'Korean Builds',
     id: 'koreanbuilds',
   },
-  {
-    name: 'Tracker.gg',
-    id: 'trackergg',
-  },
+  // TODO: Tracker.gg - activate when implemented
+  // {
+  //   name: 'Tracker.gg',
+  //   id: 'trackergg',
+  // },
 ];
 
 export default sources_info;

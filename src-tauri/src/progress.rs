@@ -1,4 +1,6 @@
 // Progress module - tracks and emits progress events to the frontend
+// TODO: Integrate with frontend progress bar
+#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 

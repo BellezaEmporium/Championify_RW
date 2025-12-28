@@ -1,392 +1,505 @@
 /**
  * Backend Bridge Module
  * Connects the frontend UI (src/ui.js) with backend logic (backend/src/)
- *
- * This module serves as an adapter layer between the modern Marko/Tailwind frontend
- * and the existing Node.js backend that handles:
- * - Item set downloads
- * - File operations
- * - API calls to sources (ProBuilds, u.gg, OP.GG, etc.)
- * - Preferences management
  */
 
-import championify from '../backend/src/championify.js';
-import preferences from '../backend/src/preferences.js';
-import store from '../backend/src/store.js';
-import T from '../backend/src/translate.js';
-import pathManager from '../backend/src/path_manager.js';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
+import getUnicodeFlagIcon from 'country-flag-icons/unicode';
 
-/**
- * Initialize backend with user preferences
- */
-export async function initBackend() {
+// Internal state
+let _importUnlistener = null;
+
+function isTauriContext() {
   try {
-    // Load saved preferences
-    const prefs = preferences.load();
-    if (prefs) {
-      console.log('Loaded preferences:', prefs);
-      // Apply preferences to the UI
-      applyPreferencesToUI(prefs);
-    }
-
-    // Load versions
-    await loadVersions();
-
-    console.log('Backend initialized');
-  } catch (error) {
-    console.error('Failed to initialize backend:', error);
+    return typeof globalThis !== 'undefined' && !!globalThis.isTauri;
+  } catch {
+    return false;
   }
 }
 
-/**
- * Apply saved preferences to UI elements
- */
-function applyPreferencesToUI(prefs) {
-  // Install path
-  if (prefs.install_path) {
-    const pathInput = document.getElementById('install_path');
-    if (pathInput) pathInput.value = prefs.install_path;
-  }
-
-  // Locale
-  if (prefs.locale) {
-    document.dispatchEvent(
-      new CustomEvent('localeChange', {
-        detail: { locale: prefs.locale },
-      })
+function maybeInvoke(command, args) {
+  if (!isTauriContext()) {
+    return Promise.reject(
+      new Error(`[BackendBridge] Tauri runtime not available (cannot invoke "${command}").`)
     );
   }
 
-  // Options checkboxes
-  const checkboxOptions = [
-    'aram',
-    'splititems',
-    'skillsformat',
-    'consumables',
-    'trinkets',
-    'locksr',
-    'dontdeleteold',
-  ];
+  return invoke(command, args);
+}
 
-  checkboxOptions.forEach(option => {
-    const checkbox = document.getElementById(`options_${option}`);
-    if (checkbox && typeof prefs[option] !== 'undefined') {
-      checkbox.checked = prefs[option];
+export const tauriApi = {
+  // Preferences
+  loadPreferences: () => (isTauriContext() ? invoke('load_preferences') : Promise.resolve(null)),
+  savePreferences: prefs =>
+    isTauriContext() ? invoke('save_preferences', { preferences: prefs }) : Promise.resolve(null),
+  getOsLocale: () => {
+    if (isTauriContext()) return invoke('get_os_locale');
+    if (typeof navigator !== 'undefined' && navigator.language) {
+      return Promise.resolve(navigator.language);
     }
+    return Promise.resolve(null);
+  },
+
+  // Paths
+  findLolInstallation: () => maybeInvoke('find_lol_installation'),
+  getItemSetsPath: lolPath => maybeInvoke('get_item_sets_path', { lol_path: lolPath }),
+
+  // Import
+  importBuilds: (sources, options, path) =>
+    maybeInvoke('import_builds', { payload: { sources, options, path } }),
+
+  // Build Management
+  deleteBuilds: lolPath => maybeInvoke('delete_builds', { lol_path: lolPath }),
+  countExistingBuilds: lolPath => maybeInvoke('count_existing_builds', { lol_path: lolPath }),
+
+  // Info
+  getAvailableSources: () => maybeInvoke('get_available_sources'),
+  getVersion: () => maybeInvoke('get_version'),
+  getLolVersion: () => maybeInvoke('get_lol_version'),
+  getLolVersionFromPath: path => maybeInvoke('get_lol_version_from_path', { path }),
+  // Scraper registry / health
+  getScraperStatuses: () => maybeInvoke('get_scraper_statuses'),
+};
+
+/**
+ * Initialize backend connection and listeners
+ */
+async function initBackend() {
+  console.log('[BackendBridge] Initializing...');
+
+  if (!isTauriContext()) {
+    console.warn('[BackendBridge] Skipping backend init (not in Tauri context).');
+    return;
+  }
+
+  // Setup import progress listener
+  if (_importUnlistener) {
+    _importUnlistener();
+  }
+
+  _importUnlistener = await listen('import-progress', event => {
+    const { source, status, count } = event.payload;
+    updateProgress(source, status, count);
   });
 
-  // Selected sources
-  if (prefs.sr_source) {
-    const sourcesInput = document.getElementById('options_sr_source');
-    if (sourcesInput) sourcesInput.value = prefs.sr_source;
-
-    // Update UI to show selected sources
-    const sourceItems = document.querySelectorAll('.rift_source .item');
-    sourceItems.forEach(item => {
-      const value = item.dataset.value;
-      if (prefs.sr_source.includes(value)) {
-        item.classList.add('active');
-      }
-    });
-  }
-
-  // Positions
-  if (prefs.consumables_position) {
-    const position = prefs.consumables_position;
-    const items = document.querySelectorAll('#options_consumables_position .item');
-    items.forEach(item => {
-      if (item.classList.contains(position)) {
-        item.classList.add('active');
-      }
-    });
-  }
-
-  if (prefs.trinkets_position) {
-    const position = prefs.trinkets_position;
-    const items = document.querySelectorAll('#options_trinkets_position .item');
-    items.forEach(item => {
-      if (item.classList.contains(position)) {
-        item.classList.add('active');
-      }
-    });
-  }
+  // Load initial data
+  await loadInitialState();
 }
 
 /**
- * Browse for LoL installation directory
+ * Load initial state (versions, preferences)
  */
-export async function browseInstallPath() {
+async function loadInitialState() {
   try {
-    // Use pathManager to find LoL path
-    const lolPath = await pathManager.findInstallPath();
+    // Load preferences
+    const prefs = await tauriApi.loadPreferences();
+    if (prefs) {
+      applyPreferences(prefs);
+      syncLocale(prefs.locale);
+    }
 
-    if (lolPath) {
-      const pathInput = document.getElementById('install_path');
-      if (pathInput) pathInput.value = lolPath;
+    // Load app version
+    const appVersion = await tauriApi.getVersion();
+    updateElementText('local_version', appVersion);
 
-      // Update message
-      updatePathMessage('green', T.t('sure_thats_league'));
+    // Load LoL patch version from API (more reliable)
+    try {
+      const lolVersion = await tauriApi.getLolVersion();
+      updateElementText('lol_version', lolVersion);
+    } catch (e) {
+      console.warn('[BackendBridge] Failed to get LoL version:', e);
+      updateElementText('lol_version', 'Unknown');
+    }
 
-      // Save preference
-      await saveCurrentPreferences();
+    // Get install path input element
+    const installPathInput = document.getElementById('install_path');
 
-      return lolPath;
+    // Determine LoL path: from input, preferences, or auto-discover
+    let lolPath = installPathInput?.value || prefs?.install_path || null;
+
+    // Auto-discover if no path is set
+    if (!lolPath) {
+      try {
+        lolPath = await tauriApi.findLolInstallation();
+        if (lolPath && installPathInput) {
+          installPathInput.value = lolPath;
+          setPathStatus('Found League of Legends!', 'green');
+        }
+      } catch (e) {
+        console.warn('[BackendBridge] Failed to auto-discover LoL path:', e);
+        setPathStatus('League of Legends not found', 'red');
+      }
     }
   } catch (error) {
-    console.error('Browse path error:', error);
-    updatePathMessage('red', T.t('invalid_path'));
+    console.error('[BackendBridge] Failed to load initial state:', error);
+    setPathStatus('Unable to load preferences', 'red');
   }
 }
 
 /**
- * Update path input message
+ * Browse for LoL installation path
  */
-function updatePathMessage(color, message) {
-  const msgElement = document.getElementById('input_msg');
-  if (msgElement) {
-    msgElement.className = color;
-    msgElement.textContent = message;
-  }
-}
-
-/**
- * Load all versions (Riot, sources)
- */
-export async function loadVersions() {
+async function browseInstallPath() {
   try {
-    // Get Riot version
-    const riotVersion = await championify.getVersion();
-    updateVersionDisplay('lol_version', riotVersion);
-
-    // Get local version
-    const localVersion = await getLocalVersion();
-    updateVersionDisplay('local_version', localVersion || T.t('unknown'));
-
-    // Get source versions (if sources are selected)
-    // This would require calling each source's version endpoint
-    // For now, mark as loading
-    const sources = ['probuilds', 'ugg', 'opgg', 'koreanbuilds', 'trackergg'];
-    sources.forEach(source => {
-      updateVersionDisplay(`${source}_version`, T.t('loading'));
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: 'Select League of Legends Installation Directory',
     });
+
+    if (selected) {
+      const installPathInput = document.getElementById('install_path');
+      if (installPathInput) {
+        installPathInput.value = selected;
+        // Trigger change event or update version manually
+        const lolVersion = await tauriApi.getLolVersionFromPath(selected);
+        updateElementText('lol_version', lolVersion);
+        saveCurrentPreferences();
+        setPathStatus('Found League of Legends!', 'green');
+      }
+    }
   } catch (error) {
-    console.error('Failed to load versions:', error);
-  }
-}
-
-/**
- * Get local item sets version
- */
-async function getLocalVersion() {
-  // Implementation would check the local item sets for version info
-  // This is a placeholder
-  return store.get('local_version') || null;
-}
-
-/**
- * Update version display in UI
- */
-function updateVersionDisplay(elementId, version) {
-  const element = document.getElementById(elementId);
-  if (element) {
-    element.textContent = version;
+    console.error('[BackendBridge] Failed to browse path:', error);
+    setPathStatus('Unable to read that directory', 'red');
   }
 }
 
 /**
  * Import item sets
  */
-export async function importItemSets() {
-  try {
-    // Verify settings first
-    const settings = collectSettings();
-    const valid = await championify.verifySettings(settings);
+async function importItemSets() {
+  const importBtn = document.getElementById('import_btn');
+  const processLog = document.getElementById('process_log');
+  const progressBar = document.getElementById('itemsets_progress_bar');
+  const progressText = progressBar?.querySelector('.progress');
+  const logContainer = document.getElementById('cl_progress');
+  const mainView = document.getElementById('main_view');
+  const statusView = document.getElementById('status_view');
+  const doneView = document.getElementById('done_view');
 
-    if (!valid) {
-      showError(T.t('select_folder'));
-      return;
+  if (importBtn) importBtn.classList.add('loading', 'disabled');
+  if (processLog) processLog.classList.remove('hidden');
+  if (mainView) mainView.classList.add('hidden');
+  if (statusView) statusView.classList.remove('hidden');
+  if (doneView) doneView.classList.add('hidden');
+
+  // Reset log
+  if (logContainer) logContainer.innerHTML = '';
+  if (progressBar) progressBar.dataset.percent = 0;
+  if (progressText) progressText.textContent = '0%';
+
+  try {
+    const sources = getSelectedSources();
+    const options = getOptions();
+    const path = document.getElementById('install_path')?.value;
+
+    if (!path) {
+      throw new Error('League of Legends path not selected');
     }
 
-    // Show progress section
-    showProgressSection();
+    if (sources.length === 0) {
+      throw new Error('No sources selected');
+    }
 
-    // Start import
-    store.set('importing', true);
-    await championify.run(settings);
+    addToLog('Starting import...', 'info');
 
-    // Show completion
-    showCompletionView();
+    const result = await tauriApi.importBuilds(sources, options, path);
+
+    if (result.success) {
+      addToLog(`Import complete! ${result.builds_imported} builds imported.`, 'success');
+      if (statusView) statusView.classList.add('hidden');
+      if (doneView) doneView.classList.remove('hidden');
+    } else {
+      addToLog(`Import failed: ${result.error}`, 'error');
+      if (mainView) mainView.classList.remove('hidden');
+      if (statusView) statusView.classList.add('hidden');
+    }
   } catch (error) {
-    console.error('Import error:', error);
-    showError(error.message || T.t('something_broke'));
+    addToLog(`Error: ${error.message || error}`, 'error');
+    if (mainView) mainView.classList.remove('hidden');
+    if (statusView) statusView.classList.add('hidden');
   } finally {
-    store.set('importing', false);
+    if (importBtn) importBtn.classList.remove('loading', 'disabled');
   }
 }
 
 /**
- * Delete old item sets
+ * Delete item sets
  */
-export async function deleteItemSets() {
+async function deleteItemSets() {
+  const deleteBtn = document.getElementById('delete_btn');
+  if (deleteBtn) deleteBtn.classList.add('loading', 'disabled');
+
   try {
-    // Get install path
-    const installPath = document.getElementById('install_path')?.value;
+    const path = document.getElementById('install_path')?.value;
+    if (!path) throw new Error('League of Legends path not selected');
 
-    if (!installPath) {
-      showError(T.t('select_folder'));
-      return;
+    const result = await tauriApi.deleteBuilds(path);
+
+    if (result.success) {
+      alert(`Deleted ${result.builds_deleted} builds.`);
+    } else {
+      alert(`Failed to delete builds: ${result.error}`);
     }
-
-    // Show delete progress modal
-    const deleteModal = document.getElementById('delete_notification');
-    if (deleteModal) {
-      deleteModal.classList.remove('hidden');
-    }
-
-    // Perform deletion
-    await championify.delete(installPath);
-
-    // Hide modal
-    if (deleteModal) {
-      deleteModal.classList.add('hidden');
-    }
-
-    // Update local version
-    updateVersionDisplay('local_version', T.t('unknown'));
-
-    console.log('Item sets deleted successfully');
   } catch (error) {
-    console.error('Delete error:', error);
-    showError(error.message || T.t('something_broke'));
+    alert(`Error: ${error.message || error}`);
+  } finally {
+    if (deleteBtn) deleteBtn.classList.remove('loading', 'disabled');
   }
 }
 
 /**
- * Collect current settings from UI
+ * Save current UI preferences to backend
  */
-function collectSettings() {
-  const settings = {
+async function saveCurrentPreferences() {
+  const prefs = {
     install_path: document.getElementById('install_path')?.value || '',
-    locale: store.get('locale') || 'en',
+    sr_source: getSelectedSources(),
     aram: document.getElementById('options_aram')?.checked || false,
     splititems: document.getElementById('options_splititems')?.checked || false,
     skillsformat: document.getElementById('options_skillsformat')?.checked || false,
     consumables: document.getElementById('options_consumables')?.checked || false,
+    consumables_position: getDropdownValue('options_consumables_position') || 'beginning',
     trinkets: document.getElementById('options_trinkets')?.checked || false,
+    trinkets_position: getDropdownValue('options_trinkets_position') || 'beginning',
     locksr: document.getElementById('options_locksr')?.checked || false,
     dontdeleteold: document.getElementById('options_dontdeleteold')?.checked || false,
-    sr_source: document.getElementById('options_sr_source')?.value || '',
+    locale: document.querySelector('#locals_select input[name="locale"]')?.value || 'en',
   };
 
-  // Get positions
-  const consumablesPos = document.querySelector('#options_consumables_position .item.active');
-  if (consumablesPos) {
-    settings.consumables_position = consumablesPos.classList.contains('beginning')
-      ? 'beginning'
-      : 'end';
-  }
-
-  const trinketsPos = document.querySelector('#options_trinkets_position .item.active');
-  if (trinketsPos) {
-    settings.trinkets_position = trinketsPos.classList.contains('beginning') ? 'beginning' : 'end';
-  }
-
-  return settings;
-}
-
-/**
- * Save current preferences
- */
-export async function saveCurrentPreferences() {
   try {
-    const settings = collectSettings();
-    await preferences.save(settings);
-    console.log('Preferences saved');
+    await tauriApi.savePreferences(prefs);
+    console.log('[BackendBridge] Preferences saved');
   } catch (error) {
-    console.error('Failed to save preferences:', error);
+    console.error('[BackendBridge] Failed to save preferences:', error);
   }
 }
 
-/**
- * Show progress section
- */
-function showProgressSection() {
-  const mainView = document.getElementById('btns_versions');
-  const progressView = document.getElementById('process_log');
+// Helpers
 
-  if (mainView) mainView.classList.add('hidden');
-  if (progressView) progressView.classList.remove('hidden');
+function getSelectedSources() {
+  const input = document.getElementById('options_sr_source');
+  return input && input.value ? input.value.split(',') : [];
 }
 
-/**
- * Show completion view
- */
-function showCompletionView() {
-  const viewContainer = document.getElementById('view');
-  if (!viewContainer) return;
-
-  // This would require loading the complete.marko component
-  // For now, just show a simple message
-  viewContainer.innerHTML = `
-    <div class="text-center py-12">
-      <div class="text-4xl font-bold text-white mb-4">${T.t('done')}</div>
-      <div class="text-slate-300 mb-8">${T.t('start_league')}</div>
-    </div>
-  `;
+function getOptions() {
+  return {
+    aram: document.getElementById('options_aram')?.checked,
+    splititems: document.getElementById('options_splititems')?.checked,
+    skillsformat: document.getElementById('options_skillsformat')?.checked,
+    consumables: document.getElementById('options_consumables')?.checked,
+    consumables_position: getDropdownValue('options_consumables_position'),
+    trinkets: document.getElementById('options_trinkets')?.checked,
+    trinkets_position: getDropdownValue('options_trinkets_position'),
+    locksr: document.getElementById('options_locksr')?.checked,
+    dontdeleteold: document.getElementById('options_dontdeleteold')?.checked,
+  };
 }
 
-/**
- * Show error view
- */
-function showError(message) {
-  const viewContainer = document.getElementById('view');
-  if (!viewContainer) return;
-
-  // Show error in a modal or alert
-  alert(message);
+function getDropdownValue(id) {
+  const menu = document.getElementById(id);
+  if (!menu) return null;
+  const activeItem = menu.querySelector('.item.active');
+  if (activeItem) {
+    return activeItem.classList.contains('beginning') ? 'beginning' : 'end';
+  }
+  return null;
 }
 
-/**
- * Update progress bar
- */
-export function updateProgress(percent, message) {
-  const progressBar = document.getElementById('itemsets_progress_bar');
-  const progressBarInner = progressBar?.querySelector('.bar');
-  const progressText = progressBar?.querySelector('.progress');
-  const progressLog = document.getElementById('cl_progress');
+function updateElementText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
 
-  if (progressBar) {
-    progressBar.dataset.percent = percent;
+function setPathStatus(message, tone = 'info') {
+  const el = document.getElementById('input_msg');
+  if (!el) return;
+  el.textContent = message;
+  el.className = '';
+  el.classList.add(tone);
+}
+
+function applyPreferences(prefs) {
+  if (prefs.install_path) {
+    const el = document.getElementById('install_path');
+    if (el) el.value = prefs.install_path;
   }
 
-  if (progressBarInner) {
-    progressBarInner.style.width = `${percent}%`;
+  const checkboxMap = {
+    options_aram: prefs.aram,
+    options_splititems: prefs.splititems,
+    options_skillsformat: prefs.skillsformat,
+    options_consumables: prefs.consumables,
+    options_trinkets: prefs.trinkets,
+    options_locksr: prefs.locksr,
+    options_dontdeleteold: prefs.dontdeleteold,
+  };
+
+  Object.entries(checkboxMap).forEach(([id, value]) => {
+    const checkbox = document.getElementById(id);
+    if (checkbox) checkbox.checked = Boolean(value);
+  });
+
+  if (prefs.consumables_position) {
+    const menu = document.getElementById('options_consumables_position');
+    if (menu) {
+      menu.querySelectorAll('.item').forEach(item => {
+        item.classList.toggle(
+          'active',
+          item.classList.contains(prefs.consumables_position === 'end' ? 'end' : 'beginning')
+        );
+      });
+    }
   }
 
-  if (progressText) {
-    progressText.textContent = `${percent}%`;
+  if (prefs.trinkets_position) {
+    const menu = document.getElementById('options_trinkets_position');
+    if (menu) {
+      menu.querySelectorAll('.item').forEach(item => {
+        item.classList.toggle(
+          'active',
+          item.classList.contains(prefs.trinkets_position === 'end' ? 'end' : 'beginning')
+        );
+      });
+    }
   }
 
-  if (progressLog && message) {
-    const logEntry = document.createElement('div');
-    logEntry.textContent = message;
-    logEntry.className = 'text-sm text-slate-300 mb-1';
-    progressLog.appendChild(logEntry);
-
-    // Auto-scroll to bottom
-    progressLog.scrollTop = progressLog.scrollHeight;
+  if (Array.isArray(prefs.sr_source)) {
+    const sourcesInput = document.getElementById('options_sr_source');
+    if (sourcesInput) {
+      sourcesInput.value = prefs.sr_source.join(',');
+    }
+    const sourcesMenu = document.querySelector('.rift_source .menu');
+    const triggerText = document.querySelector('.rift_source button .default.text');
+    if (sourcesMenu) {
+      const selectedNames = [];
+      sourcesMenu.querySelectorAll('.item').forEach(item => {
+        const isActive = prefs.sr_source.includes(item.dataset.value);
+        item.classList.toggle('active', isActive);
+        if (isActive) {
+          selectedNames.push(item.dataset.name || item.dataset.value);
+        }
+      });
+      if (triggerText) {
+        if (selectedNames.length === 0) {
+          triggerText.textContent = triggerText.dataset.default || triggerText.textContent;
+        } else if (selectedNames.length <= 3) {
+          triggerText.textContent = selectedNames.join(', ');
+        } else {
+          triggerText.textContent = `${selectedNames.length}x`;
+        }
+      }
+    }
   }
 }
 
-/**
- * Export all functions
- */
+function updateProgress(source, status, count) {
+  const logContainer = document.getElementById('cl_progress');
+  if (!logContainer) return;
+
+  let msg = '';
+  if (status === 'fetching') {
+    msg = `Fetching builds from ${source}...`;
+  } else if (status === 'writing') {
+    msg = `Writing builds for ${source} (${count})...`;
+  } else if (status === 'complete') {
+    msg = `Finished ${source} (${count} builds).`;
+  }
+
+  if (msg) addToLog(msg, 'info');
+}
+
+function addToLog(message, type) {
+  const logContainer = document.getElementById('cl_progress');
+  if (!logContainer) return;
+
+  const div = document.createElement('div');
+  div.className = `log-item ${type} text-sm mb-1 text-slate-200`;
+  div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+
+  if (type === 'error') div.classList.add('text-red-400');
+  if (type === 'success') div.classList.add('text-green-400');
+
+  logContainer.appendChild(div);
+  logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+// Export default object for compatibility with dynamic import
 export default {
   initBackend,
   browseInstallPath,
-  loadVersions,
   importItemSets,
   deleteItemSets,
   saveCurrentPreferences,
-  updateProgress,
 };
+
+// Locale syncing helper (front-only, to mirror saved preferences)
+function syncLocale(locale) {
+  if (!locale) return;
+  const localeInput = document.querySelector('#locals_select input[name="locale"]');
+  const localeFlag = document.querySelector('#locale_flag');
+  const localeItems = document.querySelectorAll('#locals_select .item');
+
+  if (localeInput) localeInput.value = locale;
+  if (localeFlag) {
+    localeFlag.className = 'flag-icon';
+    localeFlag.textContent = getFlagEmoji(locale);
+  }
+  localeItems.forEach(item => {
+    if (item.dataset.value === locale) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+}
+
+function getFlagEmoji(code) {
+  const map = {
+    en: getUnicodeFlagIcon('GB'),
+    fr: getUnicodeFlagIcon('FR'),
+    de: getUnicodeFlagIcon('DE'),
+    es: getUnicodeFlagIcon('ES'),
+    it: getUnicodeFlagIcon('IT'),
+    pt: getUnicodeFlagIcon('PT'),
+    'pt-BR': getUnicodeFlagIcon('BR'),
+    ru: getUnicodeFlagIcon('RU'),
+    pl: getUnicodeFlagIcon('PL'),
+    tr: getUnicodeFlagIcon('TR'),
+    vi: getUnicodeFlagIcon('VN'),
+    zh: getUnicodeFlagIcon('CN'),
+    'zh-CN': getUnicodeFlagIcon('CN'),
+    'zh-TW': getUnicodeFlagIcon('TW'),
+    ko: getUnicodeFlagIcon('KR'),
+    ja: getUnicodeFlagIcon('JP'),
+    ar: getUnicodeFlagIcon('SA'),
+    id: getUnicodeFlagIcon('ID'),
+    ms: getUnicodeFlagIcon('MY'),
+    nl: getUnicodeFlagIcon('NL'),
+    sv: getUnicodeFlagIcon('SE'),
+    fi: getUnicodeFlagIcon('FI'),
+    no: getUnicodeFlagIcon('NO'),
+    da: getUnicodeFlagIcon('DK'),
+    cs: getUnicodeFlagIcon('CZ'),
+    sk: getUnicodeFlagIcon('SK'),
+    sl: getUnicodeFlagIcon('SI'),
+    hr: getUnicodeFlagIcon('HR'),
+    sr: getUnicodeFlagIcon('RS'),
+    bg: getUnicodeFlagIcon('BG'),
+    hu: getUnicodeFlagIcon('HU'),
+    el: getUnicodeFlagIcon('GR'),
+    he: getUnicodeFlagIcon('IL'),
+    hi: getUnicodeFlagIcon('IN'),
+    th: getUnicodeFlagIcon('TH'),
+    bs: getUnicodeFlagIcon('BA'),
+    ca: getUnicodeFlagIcon('ES'),
+    ka: getUnicodeFlagIcon('GE'),
+    km: getUnicodeFlagIcon('KH'),
+    lt: getUnicodeFlagIcon('LT'),
+    lv: getUnicodeFlagIcon('LV'),
+    ro: getUnicodeFlagIcon('RO'),
+  };
+  return map[code] || '❓';
+}

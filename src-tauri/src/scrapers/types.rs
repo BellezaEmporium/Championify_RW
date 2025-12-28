@@ -40,6 +40,7 @@ pub struct RiotJsonSR {
 }
 
 // Riot JSON format (ARAM)
+#[allow(dead_code)] // For future ARAM support
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RiotJsonARAM {
     pub champion: String,
@@ -70,6 +71,7 @@ pub struct Build {
 
 impl BuildResult {
     /// Convert scraped result to standardized Build format
+    #[allow(dead_code)]
     pub fn to_build(&self) -> Build {
         Build {
             champion: self.champ.clone(),

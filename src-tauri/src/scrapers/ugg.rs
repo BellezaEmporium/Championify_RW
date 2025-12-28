@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use anyhow::{Result, Context};
 
 // ONLY import types, don't define them
-use crate::scrapers::types::{SourceInfo, ItemBlock, Item, RiotJsonSR, BuildResult};
+use crate::scrapers::types::{SourceInfo, ItemBlock, RiotJsonSR, BuildResult};
 
 const UGG_VERSION_URL: &str = "https://static.bigbrain.gg/assets/lol/riot_patch_update/prod/ugg/ugg-api-versions.json";
 const UGG_BUILD_MODES: [&str; 8] = [

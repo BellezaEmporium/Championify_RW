@@ -426,5 +426,73 @@
   "wins": {
     "text": "Wins",
     "done": true
+  },
+  "select_sources": {
+    "text": "Select sources",
+    "done": true
+  },
+  "sources_selected": {
+    "text": "{{count}} source selected",
+    "done": true
+  },
+  "sources_selected_plural": {
+    "text": "{{count}} sources selected",
+    "done": true
+  },
+  "inputs.browse_title_macos": {
+    "text": "Select League of Legends.app",
+    "done": true
+  },
+  "inputs.browse_title_default": {
+    "text": "Select League of Legends directory",
+    "done": true
+  },
+  "inputs.install_path_placeholder": {
+    "text": "League of Legends installation path",
+    "done": true
+  },
+  "options_skillsformat_hint": {
+    "text": "(Q>W>E)",
+    "done": true
+  },
+  "versions.local_items_label": {
+    "text": "Local Item Sets Version:",
+    "done": true
+  },
+  "versions.lol_label": {
+    "text": "LoL Version:",
+    "done": true
+  },
+  "versions.source_label": {
+    "text": "{{source}} Version:",
+    "done": true
+  },
+  "branding.logo_alt": {
+    "text": "Championify logo",
+    "done": true
+  },
+  "footer.donate": {
+    "text": "Donate",
+    "done": true
+  },
+  "footer.github_name": {
+    "text": "BellezaEmporium",
+    "done": true
+  },
+  "footer.version": {
+    "text": "v{{version}}",
+    "done": true
+  },
+  "window_controls.close": {
+    "text": "Close window",
+    "done": true
+  },
+  "window_controls.minimize": {
+    "text": "Minimize window",
+    "done": true
+  },
+  "window_controls.maximize": {
+    "text": "Maximize window",
+    "done": true
   }
 }

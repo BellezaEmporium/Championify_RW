@@ -1,0 +1,8 @@
+<const/message=(() => {
+  const translate = typeof $global?.t === 'function' ? $global.t : key => key;
+  const key = input.key || input.id;
+  const options = input.options || input.params;
+  const value = key ? translate(key, options) : '';
+  return value == null || value === '' ? key || '' : value;
+})()>
+<if=input.escape === false>$!{message}</if><else>${message}</else>

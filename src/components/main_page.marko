@@ -1,47 +1,54 @@
-import modals from './_modals.marko';
+import Modals from './_modals.marko';
+import { getSourceIcon } from './main_page.icons.js';
 
-<modals ...input/>
+$ {
+  const browseTitle = input.platform === 'darwin' 
+    ? 'inputs.browse_title_macos' 
+    : 'inputs.browse_title_default';
+}
 
-<div class='w-full mb-6'>
-  <div class='mb-4'>
-    <div class='text-sm font-semibold text-slate-300 mb-2'>
-      <span>${input.browse_title}</span>
-    </div>
-    <div class='flex bg-slate-900/50 rounded-full border border-white/8 overflow-hidden lol_dir_input'>
-      <input
-        id='install_path'
-        type='text'
-        class='flex-1 bg-transparent text-white px-4 py-2.5 focus:outline-none text-sm'>
-      <button
-        id='browse'
-        type='button'
-        class='bg-gradient-to-br from-slate-700 to-slate-600 text-white px-6 py-2.5 rounded-r-full font-semibold hover:shadow-[0_10px_24px_rgba(71,85,105,0.35)] transition-all'>
-        $!{input.t('browse')}
-      </button>
-    </div>
-    <div class='lol_dir_input_msg mt-2 text-sm'>
-      <span id='input_msg'/>
-    </div>
-  </div>
-</div>
+<i18n-var|i18n|>
+  <Modals ...input/>
 
-<div class='w-full mb-6'>
-  <div class='space-y-4'>
-    <div class='rift_source'>
-      <div class='relative'>
-        <input id='options_sr_source' type='hidden' value='${input.selected_sources}'>
-        <button class='w-full flex items-center justify-between px-4 py-2.5 bg-slate-900/60 rounded-2xl border border-white/8 text-slate-100 hover:bg-slate-800/60 transition-colors'>
-          <span class='default text'>
-            $!{input.t('summoners_rift_source')}
-          </span>
-          <i class='dropdown icon text-slate-400'/>
+  <div class='main-form' id='main_view'>
+    <div class='input-group'>
+      <div class='input-label'>
+        <i18n-message key=browseTitle/>
+      </div>
+      <div class='input-row'>
+        <input
+          id='install_path'
+          type='text'
+          class='text-input'
+          placeholder=i18n('inputs.install_path_placeholder')>
+        <button id='browse' type='button' class='pill-btn ghost'>
+          <i18n-message key='browse'/>
         </button>
-        <div class='menu absolute top-full mt-2 w-full bg-slate-900/95 border border-white/8 rounded-2xl shadow-2xl overflow-hidden hidden z-10'>
+      </div>
+      <div class='status-line'>
+        <span id='input_msg'/>
+      </div>
+    </div>
+
+    <div class='input-group'>
+      <div class='input-label'>
+        <i18n-message key='summoners_rift_source'/>
+      </div>
+      <div class='dropdown-shell rift_source'>
+        <input id='options_sr_source' type='hidden' value=input.selected_sources>
+        <button class='dropdown-trigger compact'>
+          <span class='default text'>
+            <i18n-message key='select_sources'/>
+          </span>
+          <i class='dropdown icon text-slate-300'/>
+        </button>
+        <div class='menu absolute top-full mt-2 w-full bg-slate-900/90 border border-white/12 rounded-lg shadow-2xl overflow-hidden hidden z-10'>
           <for|source| of=input.sources>
             <div
-              data-value='${source.id}'
-              class='item px-4 py-2.5 flex items-center gap-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors'>
-              <img src='/src/img/sources/${source.id}.png' class='sourceicon w-5 h-5'>
+              data-value=source.id
+              data-name=source.name
+              class='item px-3 py-2 flex items-center gap-2 text-slate-200 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors text-sm'>
+              <img src=getSourceIcon(source.id) class='sourceicon w-4 h-4' alt=source.name>
               ${source.name}
             </div>
           </for>
@@ -49,187 +56,126 @@ import modals from './_modals.marko';
       </div>
     </div>
 
-    <div class='flex items-center gap-3 my-3'>
-      <input id='options_aram' type='checkbox' class='w-4 h-4 accent-sky-400'>
-      <label
-        for='options_aram'
-        data-content="$!{input.t('options_aram_tooltip')}"
-        class='text-slate-300 text-sm cursor-pointer options_tooltip'>
-        $!{input.t('options_aram_tooltip')}
+    <div class='options-grid'>
+      <label class='option-row options_tooltip' data-content=i18n('options_aram_tooltip')>
+        <input id='options_aram' type='checkbox'>
+        <span><i18n-message key='options_aram_tooltip'/></span>
       </label>
-    </div>
-
-    <div class='flex items-center gap-3 my-3'>
-      <input id='options_splititems' type='checkbox' class='w-4 h-4 accent-sky-400'>
-      <label
-        for='options_splititems'
-        data-content="$!{input.t('options_splititems_tooltip')}"
-        class='text-slate-300 text-sm cursor-pointer options_tooltip'>
-        $!{input.t('options_splititems')}
+      <label class='option-row options_tooltip' data-content=i18n('options_splititems_tooltip')>
+        <input id='options_splititems' type='checkbox'>
+        <span><i18n-message key='options_splititems'/></span>
       </label>
-    </div>
-
-    <div class='flex items-center gap-3 my-3'>
-      <input id='options_skillsformat' type='checkbox' class='w-4 h-4 accent-sky-400'>
-      <label
-        for='options_skillsformat'
-        data-content="$!{input.t('options_skillsformat_tooltip')} Q.W.E.Q.W.R.Q.W.Q.W etc."
-        class='text-slate-300 text-sm cursor-pointer options_tooltip'>
-        $!{input.t('options_skillsformat')} (Q>W>E)
-      </label>
-    </div>
-
-    <div class='flex items-center gap-2 with_dropdown'>
-      <div class='flex items-center gap-3'>
-        <input id='options_consumables' type='checkbox' checked class='w-4 h-4 accent-sky-400'>
-        <label
-          for='options_consumables'
-          data-content="$!{input.t('options_consumables_tooltip')}"
-          class='text-slate-300 text-sm cursor-pointer options_tooltip'>
-          $!{input.t('options_consumables')}
-        </label>
-      </div>
-      <div class='relative'>
-        <button class='flex items-center justify-center w-8 h-8 bg-slate-700/50 border border-white/8 rounded-lg hover:bg-slate-600/50 transition-colors'>
-          <i class='small wrench icon text-slate-300'/>
-        </button>
-        <div
-          id='options_consumables_position'
-          class='menu absolute top-full mt-2 bg-slate-900/95 border border-white/8 rounded-2xl shadow-2xl overflow-hidden hidden min-w-[150px] z-10'>
-          <div class='px-4 py-3 border-b border-white/8 flex items-center gap-2'>
-            <i class='resize vertical icon text-sky-400'/>
-            <span class='font-semibold text-white text-sm'>
-              $!{input.t('select_position')}
-            </span>
-          </div>
-          <div class='item beginning px-4 py-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors'>
-            $!{input.t('beginning')}
-          </div>
-          <div class='item end px-4 py-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors'>
-            $!{input.t('end')}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class='flex items-center gap-2 with_dropdown'>
-      <div class='flex items-center gap-3'>
-        <input id='options_trinkets' type='checkbox' checked class='w-4 h-4 accent-sky-400'>
-        <label
-          for='options_trinkets'
-          data-content="$!{input.t('options_trinkets_tooltip')}"
-          class='text-slate-300 text-sm cursor-pointer options_tooltip'>
-          $!{input.t('options_trinkets')}
-        </label>
-      </div>
-      <div class='relative'>
-        <button class='flex items-center justify-center w-8 h-8 bg-slate-700/50 border border-white/8 rounded-lg hover:bg-slate-600/50 transition-colors'>
-          <i class='small wrench icon text-slate-300'/>
-        </button>
-        <div
-          id='options_trinkets_position'
-          class='menu absolute top-full mt-2 bg-slate-900/95 border border-white/8 rounded-2xl shadow-2xl overflow-hidden hidden min-w-[150px] z-10'>
-          <div class='px-4 py-3 border-b border-white/8 flex items-center gap-2'>
-            <i class='resize vertical icon text-sky-400'/>
-            <span class='font-semibold text-white text-sm'>
-              $!{input.t('select_position')}
-            </span>
-          </div>
-          <div class='item beginning px-4 py-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors'>
-            $!{input.t('beginning')}
-          </div>
-          <div class='item end px-4 py-2.5 text-slate-300 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors'>
-            $!{input.t('end')}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class='flex items-center gap-3 my-3'>
-      <input id='options_locksr' type='checkbox' class='w-4 h-4 accent-sky-400'>
-      <label
-        for='options_locksr'
-        data-content="$!{input.t('options_locksr_tooltip')}"
-        class='text-slate-300 text-sm cursor-pointer options_tooltip'>
-        $!{input.t('options_locksr')}
-      </label>
-    </div>
-
-    <div class='flex items-center gap-3 my-3'>
-      <input id='options_dontdeleteold' type='checkbox' class='w-4 h-4 accent-sky-400'>
-      <label
-        for='options_dontdeleteold'
-        data-content="$!{input.t('options_dontdeleteold_tooltip')}"
-        class='text-slate-300 text-sm cursor-pointer options_tooltip'>
-        $!{input.t('options_dontdeleteold')}
-      </label>
-    </div>
-  </div>
-</div>
-
-<div class='w-full'>
-  <div id='btns_versions' class='bg-slate-900/40 rounded-3xl p-6 border border-white/8'>
-    <div class='submit_btns'>
-      <div class='h-px bg-white/8 my-6'/>
-      <div class='flex gap-4 flex-wrap'>
-        <button
-          id='import_btn'
-          class='flex-1 min-w-[160px] bg-gradient-to-br from-green-600 to-green-500 text-white px-6 py-2.5 rounded-full font-semibold hover:shadow-[0_10px_24px_rgba(34,197,94,0.35)] hover:-translate-y-0.5 transition-all duration-150'>
-          $!{input.t('import')}
-        </button>
-        <button
-          id='delete_btn'
-          class='flex-1 min-w-[160px] bg-gradient-to-br from-red-600 to-red-500 text-white px-6 py-2.5 rounded-full font-semibold hover:shadow-[0_10px_24px_rgba(239,68,68,0.35)] hover:-translate-y-0.5 transition-all duration-150'>
-          $!{input.t('delete')}
-        </button>
-      </div>
-    </div>
-    <div class='versions mt-6 grid gap-3 text-slate-400 text-sm'>
-      <div>
-        $!{input.t('local_items_version')}:${' '}
-        <span id='local_version' class='ml-2 text-white font-semibold'>
-          $!{input.t('unknown')}
-        </span>
-      </div>
-      <div>
-        LoL $!{input.t('version')}:${' '}
-        <span id='lol_version' class='ml-2 text-white font-semibold'>
-          $!{input.t('loading')}
-        </span>
-      </div>
-      <for|source| of=input.sources>
-        <div>
-          ${source.name} $!{input.t('version')}:${' '}
-          <span id='${source.id}_version' class='ml-2 text-white font-semibold'>
-            $!{input.t('loading')}
+      <label class='option-row options_tooltip' data-content=i18n('options_skillsformat_tooltip')>
+        <input id='options_skillsformat' type='checkbox'>
+        <span>
+          <i18n-message key='options_skillsformat'/>
+          <span class='text-slate-400 text-xs'>
+            <i18n-message key='options_skillsformat_hint'/>
           </span>
+        </span>
+      </label>
+      <label class='option-row options_tooltip' data-content=i18n('options_consumables_tooltip')>
+        <input id='options_consumables' type='checkbox' checked>
+        <span><i18n-message key='options_consumables'/></span>
+      </label>
+      <div id='options_consumables_position' class='hidden'>
+        <div class='item beginning'><i18n-message key='beginning'/></div>
+        <div class='item end'><i18n-message key='end'/></div>
+      </div>
+      <label class='option-row options_tooltip' data-content=i18n('options_trinkets_tooltip')>
+        <input id='options_trinkets' type='checkbox' checked>
+        <span><i18n-message key='options_trinkets'/></span>
+      </label>
+      <div id='options_trinkets_position' class='hidden'>
+        <div class='item beginning'><i18n-message key='beginning'/></div>
+        <div class='item end'><i18n-message key='end'/></div>
+      </div>
+      <label class='option-row options_tooltip' data-content=i18n('options_locksr_tooltip')>
+        <input id='options_locksr' type='checkbox'>
+        <span><i18n-message key='options_locksr'/></span>
+      </label>
+      <label class='option-row options_tooltip' data-content=i18n('options_dontdeleteold_tooltip')>
+        <input id='options_dontdeleteold' type='checkbox'>
+        <span><i18n-message key='options_dontdeleteold'/></span>
+      </label>
+    </div>
+
+    <div class='btn-row'>
+      <button id='import_btn' class='primary-btn compact'>
+        <i18n-message key='import'/>
+      </button>
+      <button id='delete_btn' class='danger-btn compact'>
+        <i18n-message key='delete'/>
+      </button>
+    </div>
+
+    <div class='versions-panel'>
+      <div class='versions-col'>
+        <div class='version-row'>
+          <span><i18n-message key='versions.local_items_label'/></span>
+          <span id='local_version'><i18n-message key='unknown'/></span>
         </div>
-      </for>
+        <div class='version-row'>
+          <span><i18n-message key='versions.lol_label'/></span>
+          <span id='lol_version'><i18n-message key='loading'/></span>
+        </div>
+      </div>
+      <div class='versions-col'>
+        <for|source| of=input.sources>
+          <div class='version-row'>
+            <span>
+              <i18n-message key='versions.source_label' options={ source: source.name }/>
+            </span>
+            <span id=source.id + '_version'><i18n-message key='loading'/></span>
+          </div>
+        </for>
+      </div>
     </div>
   </div>
 
-  <div id='process_log' class='hidden bg-slate-900/40 rounded-3xl p-6 border border-white/8 mt-6'>
-    <div class='status'>
-      <div class='relative text-center my-10 before:absolute before:left-0 before:top-1/2 before:w-[35%] before:h-px before:bg-white/8 after:absolute after:right-0 after:top-1/2 after:w-[35%] after:h-px after:bg-white/8'>
-        <h2 class='text-lg font-semibold text-white'>
-          $!{input.t('status')}
-        </h2>
-      </div>
+  <div class='status-page hidden' id='status_view'>
+    <div class='status-header text-center mb-3'>
+      <h2 class='text-lg font-semibold text-white tracking-wide'>
+        <i18n-message key='status'/>
+      </h2>
+    </div>
+
+    <div id='process_log' class='status-card'>
       <div
         id='itemsets_progress_bar'
         data-percent='0'
-        class='bg-slate-900/80 rounded-full overflow-hidden relative border border-white/8 h-3.5'>
+        class='status-progress rounded-full overflow-hidden relative border border-white/8 h-4'>
         <div
           style='transition-duration: 300ms; -webkit-transition-duration: 300ms;'
-          class='bar bg-gradient-to-br from-sky-400 to-green-500 h-full rounded-full relative'>
-          <div class='progress absolute inset-0 flex items-center justify-center text-xs text-white'>
+          class='bar bg-gradient-to-br from-lime-400 to-green-500 h-full rounded-full relative'>
+          <div class='progress absolute inset-0 flex items-center justify-center text-xs text-black font-semibold'>
             0%
           </div>
         </div>
       </div>
-    </div>
-    <div class='progresslog max-h-[220px] overflow-y-auto pr-2 mt-4'>
-      <div id='cl_progress'/>
+
+      <div class='status-log mt-4'>
+        <div class='status-log-body'>
+          <div id='cl_progress'/>
+        </div>
+      </div>
     </div>
   </div>
-</div>
+
+  <div class='done-page hidden' id='done_view'>
+    <div class='status-card center'>
+      <h2 class='text-xl font-semibold text-white mb-2'>
+        <i18n-message key='done'/>
+      </h2>
+      <div class='cat-emoji'>^.^</div>
+      <div class='btn-row mt-4'>
+        <button id='back_btn' class='pill-btn ghost'>
+          <i18n-message key='back'/>
+        </button>
+        <button id='start_lol_btn' class='primary-btn compact'>
+          <i18n-message key='start_league'/>
+        </button>
+      </div>
+    </div>
+  </div>
+</i18n-var>

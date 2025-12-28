@@ -1,43 +1,58 @@
-import fs from 'fs';
-import * as glob from 'glob';
-import path from 'path';
 import { describe, it, expect } from 'vitest';
-const translationsDir = path.resolve(process.cwd(), 'public', 'translations');
+import { createTranslator, initI18n } from '../src/i18n.js';
+import { renderMessage } from '../src/i18n/marko-helpers.js';
 
-function isPR() {
-  return (
-    (process.env.TRAVIS_PULL_REQUEST && process.env.TRAVIS_PULL_REQUEST !== 'false') ||
-    !!process.env.APPVEYOR_PULL_REQUEST_NUMBER
-  );
+function createOut(t, sink) {
+  return {
+    global: { t },
+    text: value => sink.push({ type: 'text', value }),
+    write: value => sink.push({ type: 'write', value }),
+  };
 }
 
-if (!isPR()) {
-  describe('i18n', () => {
-    const sourcePath = path.join(translationsDir, '_source.json');
-    const sourceContent = JSON.parse(fs.readFileSync(sourcePath, 'utf8'));
-    const sourceKeys = Object.keys(sourceContent);
+describe('i18n rendering', () => {
+  it('renders English strings', async () => {
+    const i18n = await initI18n('en');
+    const t = createTranslator(i18n);
+    const sink = [];
+    const out = createOut(t, sink);
 
-    const localeFiles = glob
-      .sync(path.join(translationsDir, '*.json'))
-      .filter(file => path.basename(file) !== '_source.json');
-
-    describe.each(localeFiles)('Locale: %s', (localePath) => {
-      const localeContent = JSON.parse(fs.readFileSync(localePath, 'utf8'));
-      const localeKeys = Object.keys(localeContent);
-
-      it('should have the same number of keys as _source.json', () => {
-        expect(localeKeys.length).toBe(sourceKeys.length);
-      });
-
-      it('should contain all keys from _source.json', () => {
-        const missingKeys = sourceKeys.filter(key => !Object.prototype.hasOwnProperty.call(localeContent, key));
-        expect(missingKeys, `Missing keys: ${missingKeys.join(', ')}`).toEqual([]);
-      });
-
-      it('should not have extra keys not present in _source.json', () => {
-        const extraKeys = localeKeys.filter(key => !Object.prototype.hasOwnProperty.call(sourceContent, key));
-        expect(extraKeys, `Extra keys: ${extraKeys.join(', ')}`).toEqual([]);
-      });
-    });
+    renderMessage(out, { key: 'browse' });
+    expect(sink[0]).toMatchObject({ type: 'text', value: 'Browse' });
   });
-}
+
+  it('renders French strings', async () => {
+    const i18n = await initI18n('fr');
+    const t = createTranslator(i18n);
+    const sink = [];
+    const out = createOut(t, sink);
+
+    renderMessage(out, { key: 'browse' });
+    expect(sink[0]).toMatchObject({ type: 'text', value: 'Parcourir' });
+  });
+
+  it('returns the key when a translation is missing', async () => {
+    const i18n = await initI18n('en');
+    const t = createTranslator(i18n);
+    const sink = [];
+    const out = createOut(t, sink);
+
+    renderMessage(out, { key: 'missing.translation.key' });
+    expect(sink[0]).toMatchObject({ type: 'text', value: 'missing.translation.key' });
+  });
+
+  it('allows trusted HTML when escape is false', async () => {
+    const i18n = await initI18n('en');
+    i18n.addResource('en', 'translation', 'test.html', '<strong>hi</strong>');
+    const t = createTranslator(i18n);
+    const sink = [];
+    const out = createOut(t, sink);
+
+    renderMessage(out, { key: 'test.html', escape: false });
+    expect(sink[0]).toMatchObject({ type: 'write', value: '<strong>hi</strong>' });
+
+    sink.length = 0;
+    renderMessage(out, { key: 'test.html' });
+    expect(sink[0]).toMatchObject({ type: 'text', value: '<strong>hi</strong>' });
+  });
+});

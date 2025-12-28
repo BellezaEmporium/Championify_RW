@@ -38,6 +38,15 @@ fn get_default_lol_paths() -> Vec<PathBuf> {
 
 /// Find the League of Legends installation path automatically
 pub fn find_lol_path() -> Result<PathBuf> {
+    // Try to find via Riot's YAML config first (Windows only)
+    #[cfg(target_os = "windows")]
+    if let Some(path) = get_path_from_yaml() {
+        if is_valid_lol_path(&path) {
+            log::info!("Found LoL installation via YAML at: {:?}", path);
+            return Ok(path);
+        }
+    }
+
     let paths = get_default_lol_paths();
     
     for path in paths {
@@ -50,6 +59,33 @@ pub fn find_lol_path() -> Result<PathBuf> {
     Err(ChampionifyError::PathNotFound(
         "League of Legends installation not found".to_string()
     ))
+}
+
+#[cfg(target_os = "windows")]
+fn get_path_from_yaml() -> Option<PathBuf> {
+    let yaml_path = PathBuf::from(r"C:\ProgramData\Riot Games\Metadata\league_of_legends.live\league_of_legends.live.product_settings.yaml");
+    
+    if !yaml_path.exists() {
+        return None;
+    }
+
+    // Simple parsing to avoid adding dependencies
+    if let Ok(content) = fs::read_to_string(&yaml_path) {
+        for line in content.lines() {
+            let line = line.trim();
+            if line.starts_with("product_install_full_path:") {
+                if let Some(path_str) = line.splitn(2, ':').nth(1) {
+                    let path = path_str.trim().trim_matches('"').trim_matches('\'');
+                    // Handle forward slashes and trim trailing slashes
+                    // C# code: .Replace('/', '\\').TrimEnd('\\')
+                    let path = path.replace("/", "\\");
+                    return Some(PathBuf::from(path.trim_end_matches('\\')));
+                }
+            }
+        }
+    }
+    
+    None
 }
 
 /// Validate if a path is a valid LoL installation
