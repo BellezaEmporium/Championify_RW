@@ -5,8 +5,7 @@
 _Champion-If-Ayyy_
 
 [![Crowdin Translation Status](https://badges.crowdin.net/championify/localized.svg)](https://crowdin.com)
-
-Latest Release Downloads: [![Downloads](https://img.shields.io/github/downloads/BellezaEmporium/Championify-RW/latest/total.svg)](https://github.com/BellezaEmporium/Championify-RW/releases/latest)
+[![Releases](https://img.shields.io/github/downloads/BellezaEmporium/Championify-RW/latest/total.svg)](https://github.com/BellezaEmporium/Championify-RW/releases/latest)
 
 This is a current Work in Progress based on Dustin's amazing work.
 
