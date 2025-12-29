@@ -1,8 +1,6 @@
 ![Championify](src/img/logo.png)
 
-# Championify
-
-_Champion-If-Ayyy_
+# Championify [_Champion-If-Ayyy_]
 
 [![Crowdin Translation Status](https://badges.crowdin.net/championify/localized.svg)](https://crowdin.com)
 [![Releases](https://img.shields.io/github/downloads/BellezaEmporium/Championify-RW/latest/total.svg)](https://github.com/BellezaEmporium/Championify-RW/releases/latest)
