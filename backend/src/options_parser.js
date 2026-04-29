@@ -1,10 +1,8 @@
-// Parser d'options côté PWA : on s'appuie sur l'URL (query params ou hash) plutôt que process.argv.
-// Format supporté: ?import&delete ou ?flags=--import,--delete etc.
+
 function getFlags() {
   if (typeof window === 'undefined') return [];
   const url = new URL(window.location.href);
   const flags = new Set();
-  // Chaque clé sans valeur devient un flag: ?import&delete
   for (const [k, v] of url.searchParams.entries()) {
     if (v === '' || v === 'true') flags.add(`--${k}`);
     // flags=--import,--delete

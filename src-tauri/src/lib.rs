@@ -4,19 +4,22 @@ mod preferences;
 mod scrapers;
 mod item_sets;
 mod progress;
+mod riot_cdn;
 
-use progress::ProgressTracker;
-use item_sets::{build_to_item_set, write_item_set, delete_all_builds, count_builds};
 use scrapers::registry;
+use error::AppError;
+use crate::scrapers::{SOURCES, ScraperContext};
+use item_sets::{build_to_item_set, write_item_set, delete_all_builds, count_builds};
+use riot_cdn::{get_riot_champions, get_riot_items, get_riot_version};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 use sys_locale;
+use futures::future::join_all;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ImportPayload {
@@ -44,14 +47,19 @@ struct CountResult {
     count: usize,
 }
 
+pub struct AppState {
+    pub http_client: reqwest::Client,
+    pub is_importing: Mutex<bool>,
+}
+
 /// Generic response wrapper for all backend operations
 /// TODO: Use this for standardized API responses
 #[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 struct ApiResponse<T: Serialize> {
     success: bool,
     data: Option<T>,
-    error: Option<error::ErrorResponse>,
+    error: Option<AppError>,
 }
 
 // ============================================================================
@@ -59,45 +67,56 @@ struct ApiResponse<T: Serialize> {
 // ============================================================================
 
 #[tauri::command]
-async fn load_preferences() -> std::result::Result<preferences::PreferencesUI, String> {
+async fn load_preferences() -> std::result::Result<preferences::PreferencesUI, AppError> {
     log::info!("Loading preferences for UI");
-    let prefs = preferences::Preferences::load_ui().map_err(|e| e.to_string())?;
+    let prefs = preferences::Preferences::load_ui()?;
     Ok(prefs)
 }
 
 #[tauri::command]
-async fn save_preferences(preferences: preferences::PreferencesUI) -> std::result::Result<(), String> {
+async fn save_preferences(preferences: preferences::PreferencesUI) -> std::result::Result<(), AppError> {
     log::info!("Saving preferences from UI");
-    preferences::Preferences::save_ui(preferences).map_err(|e| e.to_string())
+    preferences::Preferences::save_ui(preferences)?;
+    Ok(())
 }
 
 #[tauri::command]
-async fn get_os_locale() -> std::result::Result<String, String> {
+async fn get_os_locale() -> std::result::Result<String, AppError> {
     Ok(sys_locale::get_locale().unwrap_or_else(|| "en".to_string()))
 }
-
+    
 // ============================================================================
 // Path Detection Commands
 // ============================================================================
 
 #[tauri::command]
-async fn find_lol_installation() -> std::result::Result<String, String> {
+async fn find_lol_installation() -> std::result::Result<String, AppError> {
     log::info!("Finding LoL installation");
-    let path = paths::find_lol_path().map_err(|e| e.to_string())?;
+    let path = paths::find_lol_path()?;
     Ok(path.to_string_lossy().to_string())
 }
 
+pub fn resolve_lol_path(provided_path: Option<String>) -> Result<PathBuf, AppError> {
+    if let Some(path) = provided_path {
+        let path_buf = PathBuf::from(path);
+        if paths::is_valid_lol_path(&path_buf) {
+            log::info!("Using provided LoL path: {:?}", path_buf);
+            return Ok(path_buf);
+        } else {
+            log::warn!("Provided path is not a valid LoL installation: {:?}", path_buf);
+        }
+    }
+    
+    paths::find_lol_path()
+}
+
 #[tauri::command]
-async fn get_item_sets_path(lol_path: Option<String>) -> std::result::Result<String, String> {
+async fn get_item_sets_path(lol_path: Option<String>) -> std::result::Result<String, AppError> {
     log::info!("Getting item sets path");
     
-    let lol_path = if let Some(path) = lol_path {
-        PathBuf::from(path)
-    } else {
-        paths::find_lol_path().map_err(|e| e.to_string())?
-    };
+    let lol_path = resolve_lol_path(lol_path)?;
     
-    let item_sets_path = paths::get_item_sets_path(&lol_path).map_err(|e| e.to_string())?;
+    let item_sets_path = paths::get_item_sets_path(&lol_path)?;
     Ok(item_sets_path.to_string_lossy().to_string())
 }
 
@@ -108,80 +127,65 @@ async fn get_item_sets_path(lol_path: Option<String>) -> std::result::Result<Str
 #[tauri::command]
 async fn import_builds(
     app: AppHandle,
+    state: tauri::State<'_, AppState>,
     payload: ImportPayload,
-) -> std::result::Result<ImportResult, String> {
+) -> std::result::Result<ImportResult, AppError> {
     log::info!("Starting build import from sources: {:?}", payload.sources);
+
+    {
+        let mut is_importing = state.is_importing.lock().unwrap();
+        if *is_importing {
+            return Err(AppError::Custom("Import already in progress".to_string()));
+        }
+        *is_importing = true;
+    }
     
     // Get LoL path
-    let lol_path = if let Some(path) = payload.path {
-        PathBuf::from(path)
-    } else {
-        paths::find_lol_path().map_err(|e| e.to_string())?
-    };
+    let lol_path = resolve_lol_path(payload.path)?;
     
-    let item_sets_path = paths::get_item_sets_path(&lol_path).map_err(|e| e.to_string())?;
-    
-    // Create progress tracker
-    let _progress = Arc::new(Mutex::new(ProgressTracker::new(app.clone())));
+    let item_sets_path = paths::get_item_sets_path(&lol_path)?;
     
     // Create HTTP client
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())?;
+
+    let needs_riot_version = payload.sources.iter().any(|source| source == "ugg");
+    let riot_version = if needs_riot_version {
+        match get_riot_version(&state.http_client).await {
+            Ok(version) => version,
+            Err(err) => {
+                log::warn!("Failed to resolve Riot patch version: {}", err);
+                "latest".to_string()
+            }
+        }
+    } else {
+        String::new()
+    };
+
+    if needs_riot_version {
+        log::info!("Using Riot patch version: {}", riot_version);
+    }
     
-    let mut total_builds = 0;
-    
-    // Iterate through each source
-    for source_id in payload.sources {
-        log::info!("Processing source: {}", source_id);
+    let futures = payload.sources.iter().map(|source_id| {
+        let client = &state.http_client;
+        let riot_version = riot_version.clone();
+        let app = app.clone();
+        let item_sets_path = item_sets_path.clone();
         
-        // Emit progress to frontend
-        let _ = app.emit("import-progress", json!({
-            "source": source_id,
-            "status": "fetching"
-        }));
-        
-        // Get builds from source
-        let version = get_version().await.map_err(|e| e.to_string())?;
-        let builds = match source_id.as_str() {
-            "ugg" => {
-                scrapers::ugg::get_sr(&client, version.as_str(), "ranked_solo_5x5")
-                    .await
-                    .map_err(|e| e.to_string())?
-            }
-            "opgg" => {
-                scrapers::opgg::get_sr(&client)
-                    .await
-                    .map_err(|e| e.to_string())?
-            }
-            "probuilds" => {
-                scrapers::probuilds::get_sr(&client)
-                    .await
-                    .map_err(|e| e.to_string())?
-            }
-            "koreanbuilds" => {
-                scrapers::koreanbuilds::get_sr(&client)
-                    .await
-                    .map_err(|e| e.to_string())?
-            }
-            "trackergg" => {
-                // Tracker.gg is not yet implemented - returns empty vector
-                scrapers::trackergg::get_sr(&client)
-                    .await
-                    .map_err(|e| e.to_string())?
-            }
-            _ => {
-                log::warn!("Unknown source: {}", source_id);
-                continue;
-            }
-        };
-        
-        log::info!("Fetched {} builds from {}", builds.len(), source_id);
-        
-        // Write builds to disk
-        for (index, build_result) in builds.iter().enumerate() {
-            // Convert BuildResult to Build format expected by item_sets
+        async move {
+            log::info!("Processing source: {}", source_id);
+            
+            let _ = app.emit("import-progress", json!({
+                "source": source_id,
+                "status": "fetching"
+            }));
+            
+            let builds = match SOURCES.get(source_id.as_str()) {
+                Some(scraper) => scraper.get_sr(&client, &ScraperContext { riot_version: riot_version.clone(), game_type: "".to_string() }, None).await?,
+                None => return Err(AppError::Custom(format!("Unknown source: {}", source_id))),
+            };
+            
+            let write_futures = builds.into_iter().enumerate().map(|(index, build_result)| {
+            let item_sets_path = item_sets_path.clone();
+            
             let build = scrapers::types::Build {
                 champion: build_result.champ.clone(),
                 role: build_result.file_prefix.clone(),
@@ -190,32 +194,36 @@ async fn import_builds(
                 skills: None,
             };
             
-            let item_set = build_to_item_set(&build);
-            
-            write_item_set(&item_sets_path, &build.champion, index, &item_set)
-                .map_err(|e| e.to_string())?;
-            
-            total_builds += 1;
-            
-            // Update progress
-            if total_builds % 10 == 0 {
-                let _ = app.emit("import-progress", json!({
-                    "source": source_id,
-                    "status": "writing",
-                    "count": total_builds
-                }));
+            async move {
+                write_item_set(&item_sets_path, &build.champion, index, &build_to_item_set(&build)).await
             }
+        });
+
+        let write_results = futures::future::join_all(write_futures).await;
+
+        let mut count = 0;
+        for res in write_results {
+            res?;
+            count += 1;
         }
-        
+
         let _ = app.emit("import-progress", json!({
             "source": source_id,
             "status": "complete",
-            "count": builds.len()
+            "count": count
         }));
-    }
+
+        Ok::<usize, AppError>(count)
+        }
+    });
+    *state.is_importing.lock().unwrap() = false;
     
+    let results = join_all(futures).await;
+    
+    let total_builds: usize = results.into_iter().sum::<Result<usize, AppError>>()?;
+
     log::info!("Import complete. Total builds imported: {}", total_builds);
-    
+
     Ok(ImportResult {
         success: true,
         error: None,
@@ -228,19 +236,15 @@ async fn import_builds(
 // ============================================================================
 
 #[tauri::command]
-async fn delete_builds(lol_path: Option<String>) -> std::result::Result<DeleteResult, String> {
+async fn delete_builds(lol_path: Option<String>) -> std::result::Result<DeleteResult, AppError> {
     log::info!("Deleting all builds");
     
-    let lol_path = if let Some(path) = lol_path {
-        PathBuf::from(path)
-    } else {
-        paths::find_lol_path().map_err(|e| e.to_string())?
-    };
+    let lol_path = resolve_lol_path(lol_path)?;
     
-    let item_sets_path = paths::get_item_sets_path(&lol_path).map_err(|e| e.to_string())?;
-    let count_before = count_builds(&item_sets_path).map_err(|e| e.to_string())?;
+    let item_sets_path = paths::get_item_sets_path(&lol_path)?;
+    let count_before = count_builds(&item_sets_path).await?;
     
-    delete_all_builds(&item_sets_path).map_err(|e| e.to_string())?;
+    delete_all_builds(&item_sets_path).await?;
     
     Ok(DeleteResult {
         success: true,
@@ -250,17 +254,13 @@ async fn delete_builds(lol_path: Option<String>) -> std::result::Result<DeleteRe
 }
 
 #[tauri::command]
-async fn count_existing_builds(lol_path: Option<String>) -> std::result::Result<CountResult, String> {
+async fn count_existing_builds(lol_path: Option<String>) -> std::result::Result<CountResult, AppError> {
     log::info!("Counting existing builds");
     
-    let lol_path = if let Some(path) = lol_path {
-        PathBuf::from(path)
-    } else {
-        paths::find_lol_path().map_err(|e| e.to_string())?
-    };
+    let lol_path = resolve_lol_path(lol_path)?;
     
-    let item_sets_path = paths::get_item_sets_path(&lol_path).map_err(|e| e.to_string())?;
-    let count = count_builds(&item_sets_path).map_err(|e| e.to_string())?;
+    let item_sets_path = paths::get_item_sets_path(&lol_path)?;
+    let count = count_builds(&item_sets_path).await?;
     
     Ok(CountResult { count })
 }
@@ -270,19 +270,9 @@ async fn count_existing_builds(lol_path: Option<String>) -> std::result::Result<
 // ============================================================================
 
 #[tauri::command]
-async fn get_available_sources() -> std::result::Result<Vec<serde_json::Value>, String> {
+async fn get_available_sources() -> std::result::Result<Vec<scrapers::SourceInfo>, AppError> {
     log::info!("Getting available sources");
-    let sources = scrapers::sources_info();
-    
-    let sources_json: Vec<serde_json::Value> = sources
-        .iter()
-        .map(|s| json!({
-            "id": s.id,
-            "name": s.name,
-        }))
-        .collect();
-    
-    Ok(sources_json)
+    Ok(scrapers::sources_info())
 }
 
 #[tauri::command]
@@ -292,45 +282,18 @@ async fn get_version() -> std::result::Result<String, String> {
 
 /// Get health snapshot for all scrapers
 #[tauri::command]
-async fn get_scraper_statuses() -> std::result::Result<Vec<registry::ScraperStatus>, String> {
+async fn get_scraper_statuses(state: tauri::State<'_, AppState>) -> std::result::Result<Vec<registry::ScraperStatus>, AppError> {
     log::info!("Collecting scraper statuses");
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let statuses = registry::collect_statuses(&client).await;
-    Ok(statuses)
+    Ok(registry::collect_statuses(&state.http_client).await)
 }
 
-/// Get LoL patch version from OP.GG API (more reliable than local files)
+/// Get LoL patch version
 #[tauri::command]
-async fn get_lol_version() -> std::result::Result<String, String> {
-    log::info!("Fetching LoL version from OP.GG API");
+async fn get_lol_version(state: tauri::State<'_, AppState>) -> std::result::Result<String, AppError> {
+    log::info!("Getting Riot patch version");
     
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .map_err(|e| e.to_string())?;
-    
-    match scrapers::opgg::get_version(&client).await {
-        Ok(version) => {
-            log::info!("LoL version: {}", version);
-            Ok(version)
-        }
-        Err(e) => {
-            log::warn!("Failed to get LoL version from API: {}", e);
-            Ok("Unknown".to_string())
-        }
-    }
-}
-
-#[tauri::command]
-async fn get_lol_version_from_path(path: String) -> std::result::Result<String, String> {
-    log::info!("Getting LoL version from path: {}", path);
-    let lol_path = std::path::PathBuf::from(path);
-    paths::get_lol_version(&lol_path).map_err(|e| e.to_string())
+    get_riot_version(&state.http_client).await.or_else(|e| Err(AppError::Custom(e.to_string())))
 }
 
 // ============================================================================
@@ -339,33 +302,26 @@ async fn get_lol_version_from_path(path: String) -> std::result::Result<String, 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize logger
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     
-    let builder = tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            // Preferences
-            load_preferences,
-            save_preferences,
-            get_os_locale,
-            // Paths
-            find_lol_installation,
-            get_item_sets_path,
-            get_lol_version_from_path,
-            get_lol_version,
-            // Import
-            import_builds,
-            // Build management
-            delete_builds,
-            count_existing_builds,
-            // Info
-            get_available_sources,
-            get_version,
-            get_scraper_statuses,
-        ]);
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .pool_idle_timeout(std::time::Duration::from_secs(90)) 
+        .build()
+        .expect("Failed to build HTTP client");
 
-    builder
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .manage(AppState {
+            http_client,
+            is_importing: Mutex::new(false),
+        })
+        .invoke_handler(tauri::generate_handler![
+            load_preferences, save_preferences, get_os_locale,
+            find_lol_installation, get_item_sets_path, get_lol_version,
+            import_builds, delete_builds, count_existing_builds,
+            get_available_sources, get_version, get_scraper_statuses,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

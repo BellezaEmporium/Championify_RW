@@ -32,12 +32,9 @@ export function elevate(params = []) {
   }
 
   return new Promise((resolve, reject) => {
-    // En PWA, pas d'élévation : on rejette directement.
     return reject(
       new ChampionifyErrors.ElevateError('Elevation not supported in web/PWA environment')
     );
-
-    // Code mort laissé intentionnellement pour référencer les anciennes capacités.
   });
 }
 
@@ -82,7 +79,6 @@ export {
  * @param {Object} Formatted skill priorities
  * @returns Array of block item sets with added trinkets and consumables
  */
-
 export function trinksCon(builds, skills = {}) {
   if (store.get('settings').consumables) {
     let consumables_title = T.t('consumables', true);

@@ -1,5 +1,5 @@
 // Path manager module - detects and validates League of Legends installation
-use crate::error::{ChampionifyError, Result};
+use crate::error::AppError;
 use std::path::{Path, PathBuf};
 use std::fs;
 
@@ -37,7 +37,7 @@ fn get_default_lol_paths() -> Vec<PathBuf> {
 }
 
 /// Find the League of Legends installation path automatically
-pub fn find_lol_path() -> Result<PathBuf> {
+pub fn find_lol_path() -> Result<PathBuf, AppError> {
     // Try to find via Riot's YAML config first (Windows only)
     #[cfg(target_os = "windows")]
     if let Some(path) = get_path_from_yaml() {
@@ -56,7 +56,7 @@ pub fn find_lol_path() -> Result<PathBuf> {
         }
     }
     
-    Err(ChampionifyError::PathNotFound(
+    Err(AppError::PathNotFound(
         "League of Legends installation not found".to_string()
     ))
 }
@@ -108,7 +108,7 @@ pub fn is_valid_lol_path(path: &Path) -> bool {
 }
 
 /// Get the item sets directory path
-pub fn get_item_sets_path(lol_path: &Path) -> Result<PathBuf> {
+pub fn get_item_sets_path(lol_path: &Path) -> Result<PathBuf, AppError> {
     #[cfg(target_os = "windows")]
     let config_path = lol_path.join("Config");
     
@@ -119,7 +119,7 @@ pub fn get_item_sets_path(lol_path: &Path) -> Result<PathBuf> {
     let config_path = lol_path.join("Config");
     
     if !config_path.exists() {
-        return Err(ChampionifyError::PathNotFound(
+        return Err(AppError::PathNotFound(
             format!("Config directory not found at {:?}", config_path)
         ));
     }
@@ -128,14 +128,14 @@ pub fn get_item_sets_path(lol_path: &Path) -> Result<PathBuf> {
     
     // Create Champions directory if it doesn't exist
     if !item_sets_path.exists() {
-        fs::create_dir_all(&item_sets_path)?;
+        fs::create_dir_all(&item_sets_path).map_err(|e| AppError::PathNotFound(format!("Failed to create Champions directory: {}", e)))?;
     }
     
     Ok(item_sets_path)
 }
 
 /// Get LoL version from game files
-pub fn get_lol_version(lol_path: &Path) -> Result<String> {
+pub fn get_lol_version(lol_path: &Path) -> Result<String, AppError> {
     // Try to read version from system.yaml or other version files
     #[cfg(target_os = "windows")]
     let game_path = lol_path.join("Game");

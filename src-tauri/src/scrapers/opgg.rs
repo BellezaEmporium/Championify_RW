@@ -5,12 +5,18 @@
 // - https://lol-api-champion.op.gg/api/euw/champions/ranked/{championId}/{position}/builds
 // - https://lol-api-champion.op.gg/api/euw/champions/ranked/{championId}/{position}/items
 
+use async_trait::async_trait;
 use reqwest::{Client, header};
 use serde::Deserialize;
 use serde_json::Value;
-use anyhow::{Result, Context};
 use std::collections::HashSet;
+use crate::riot_cdn::get_riot_version;
+use crate::scrapers::{BuildScraper, ScraperContext, ScraperHealth};
+use crate::AppError;
+
 use super::types::{SourceInfo, ItemBlock, Item, RiotJsonSR, BuildResult};
+
+pub struct OpggScraper;
 
 #[derive(Debug, Deserialize)]
 struct BuildItem {
@@ -29,6 +35,29 @@ struct BuildItem {
 struct DepthGroup {
     depth: i32,
     items: Vec<BuildItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpggResponse<T> {
+    data: T,
+}
+
+// 2. Le contenu spécifique pour l'endpoint /builds
+#[derive(Debug, Deserialize)]
+struct OpggBuildData {
+    #[serde(default)]
+    combination_items: Vec<DepthGroup>,
+    #[serde(default)]
+    single_items: Vec<DepthGroup>,
+}
+
+// 3. Le contenu spécifique pour l'endpoint /items
+#[derive(Debug, Deserialize)]
+struct OpggItemData {
+    #[serde(default)]
+    boots: Vec<BuildItem>,
+    #[serde(default)]
+    starter_items: Vec<BuildItem>,
 }
 
 pub fn source_info() -> SourceInfo {
@@ -52,26 +81,235 @@ fn create_headers() -> header::HeaderMap {
     headers
 }
 
-/// Get the current patch version from OP.GG API
-pub async fn get_version(client: &Client) -> Result<String> {
-    let headers = create_headers();
-    let response = client
-        .get("https://lol-api-champion.op.gg/api/meta/versions")
-        .headers(headers)
-        .send()
-        .await?;
-    
-    let data: Value = response.json().await?;
-    
-    // The API returns { "data": ["14.24", "14.23", ...] }
-    let version = data
-        .get("data")
-        .and_then(|d| d.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|v| v.as_str())
-        .context("Version not found in response")?;
-    
-    Ok(version.to_string())
+#[async_trait]
+impl BuildScraper for OpggScraper {
+    fn source_info(&self) -> SourceInfo {
+        source_info()
+    }
+    async fn get_version(&self, client: &Client) -> Result<String, AppError> {
+        let headers = create_headers();
+        let response = client
+            .get("https://lol-api-champion.op.gg/api/meta/versions")
+            .headers(headers)
+            .send()
+            .await?;
+        
+        let data: Value = response.json().await?;
+        
+        // The API returns { "data": ["14.24", "14.23", ...] }
+        let version = data
+            .get("data")
+            .and_then(|d| d.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::Parse("Version not found in response".to_string()))?;
+        
+        Ok(version.to_string())
+    }
+    async fn get_sr(&self, client: &Client, context: &ScraperContext, _role: Option<&str>) -> Result<Vec<BuildResult>, AppError> {
+        let version = self.get_version(client).await?;
+        let headers = create_headers();
+        
+        log::info!("OP.GG: Using version {}", version);
+        
+        // Get list of all champions
+        let response = client
+            .get("https://lol-api-champion.op.gg/api/euw/champions/ranked")
+            .headers(headers)
+            .send()
+            .await?;
+        
+        let data: Value = response.json().await?;
+        let champs_data = data
+            .get("data")
+            .and_then(|d| d.as_array())
+            .ok_or_else(|| AppError::Parse("Invalid champions data".to_string()))?;
+        
+        let mut results = Vec::new();
+        
+        for champ in champs_data {
+            let id = champ.get("id").and_then(|i| i.as_i64()).unwrap_or_default();
+            let name = champ.get("name").and_then(|n| n.as_str()).unwrap_or_default();
+            
+            let positions: Vec<String> = champ
+                .get("positions")
+                .and_then(|p| p.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            
+            if positions.is_empty() || id == 0 {
+                continue;
+            }
+            
+            log::debug!("Processing OP.GG: {} (ID: {})", name, id);
+            
+            for position in &positions {
+                match build_champion_position(client, id, name, position, &version, 2).await {
+                    Ok(builds) => {
+                        results.extend(builds);
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to get builds for {} {}: {}", name, position, e);
+                    }
+                }
+                
+                // Small delay to avoid rate limiting
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+        
+        log::info!("OP.GG: Fetched {} builds", results.len());
+        Ok(results)
+    }
+    async fn get_aram(&self, client: &Client, context: &ScraperContext) -> Result<Vec<BuildResult>, AppError> {
+        let version = self.get_version(client).await?;
+        let headers = create_headers();
+        
+        log::info!("OP.GG ARAM: Using version {}", version);
+        
+        // Get list of all champions for ARAM
+        let response = client
+            .get("https://lol-api-champion.op.gg/api/euw/champions/aram")
+            .headers(headers.clone())
+            .send()
+            .await?;
+        
+        let data: Value = response.json().await?;
+        let champs_data = data
+            .get("data")
+            .and_then(|d| d.as_array())
+            .ok_or_else(|| AppError::Parse("Invalid ARAM champions data".to_string()))?;
+        
+        let mut results = Vec::new();
+        
+        for champ in champs_data {
+            let id = champ.get("id").and_then(|i| i.as_i64()).unwrap_or_default();
+            let name = champ.get("name").and_then(|n| n.as_str()).unwrap_or_default();
+            
+            if id == 0 {
+                continue;
+            }
+            
+            // Fetch ARAM builds
+            let builds_url = format!(
+                "https://lol-api-champion.op.gg/api/euw/champions/aram/{}/NONE/builds",
+                id
+            );
+            
+            let builds_resp = match client.get(&builds_url).headers(headers.clone()).send().await {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            
+            let builds_json: OpggResponse<OpggBuildData> = builds_resp.json().await?;
+            
+            // Fetch items
+            let items_url = format!(
+                "https://lol-api-champion.op.gg/api/euw/champions/aram/{}/NONE/items",
+                id
+            );
+            
+            let items_resp = match client.get(&items_url).headers(headers.clone()).send().await {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            
+            let items_json: OpggResponse<OpggItemData> = match items_resp.json().await {
+                Ok(j) => j,
+                Err(_) => continue,
+            };
+            
+            // Parse builds (similar logic to SR)
+            let combination_items = builds_json.data.combination_items;
+            if combination_items.is_empty() {
+                continue;
+            }
+            let max_depth = combination_items.iter().map(|d| d.depth).max().unwrap_or(0);
+            
+            let empty_builds: Vec<BuildItem> = vec![];
+            let full_builds = combination_items
+                .iter()
+                .find(|d| d.depth == max_depth)
+                .map(|d| &d.items)
+                .unwrap_or(&empty_builds);
+            
+            if full_builds.is_empty() {
+                continue;
+            }
+            
+            // Get first build only for ARAM
+            let build_data = &full_builds[0];
+            if build_data.ids.is_empty() {
+                continue;
+            }
+            
+            let mut blocks = Vec::new();
+            
+            // Starter items
+            let starters = &items_json.data.starter_items;
+            if !starters.is_empty() {
+                let starter_items: Vec<Item> = starters[0]
+                    .ids
+                    .iter()
+                    .map(|id| Item { id: id.to_string(), count: 1 })
+                    .collect();
+                
+                if !starter_items.is_empty() {
+                    blocks.push(ItemBlock {
+                        block_type: "Starter Items".to_string(),
+                        items: starter_items,
+                    });
+                }
+            }
+            
+            // Full build items
+            let full_items: Vec<Item> = build_data
+                .ids
+                .iter()
+                .map(|id| Item { id: id.to_string(), count: 1 })
+                .collect();
+            
+            if !full_items.is_empty() {
+                blocks.push(ItemBlock {
+                    block_type: "Full Build".to_string(),
+                    items: full_items,
+                });
+            }
+            
+            if !blocks.is_empty() {
+                let title = format!("OPGG ARAM {} - {}", name, version);
+                
+                results.push(BuildResult {
+                    champ: name.to_string(),
+                    file_prefix: "aram".to_string(),
+                    riot_json: RiotJsonSR {
+                        champion: name.to_string(),
+                        title,
+                        blocks,
+                        map: Some("HA".to_string()),
+                    },
+                    source: "opgg".to_string(),
+                });
+            }
+            
+            // Rate limiting
+            tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+        }
+        
+        log::info!("OP.GG ARAM: Fetched {} builds", results.len());
+        Ok(results)
+    }
+    async fn check_health(&self, client: &Client) -> ScraperHealth {
+        if self.get_version(client).await.is_ok() {
+            ScraperHealth::Available
+        } else {
+            ScraperHealth::Down
+        }
+    }
 }
 
 /// Get items by depth from single_items array
@@ -90,7 +328,7 @@ async fn build_champion_position(
     position: &str,
     version: &str,
     max_builds: usize,
-) -> Result<Vec<BuildResult>> {
+) -> Result<Vec<BuildResult>, AppError> {
     let headers = create_headers();
     let position_lower = position.to_lowercase();
     
@@ -106,7 +344,7 @@ async fn build_champion_position(
         .send()
         .await?;
     
-    let builds_json: Value = builds_resp.json().await?;
+    let builds_json: OpggResponse<OpggBuildData> = builds_resp.json().await?;
     
     // Fetch /items endpoint for boots and starter items
     let items_url = format!(
@@ -120,20 +358,12 @@ async fn build_champion_position(
         .send()
         .await?;
     
-    let items_json: Value = items_resp.json().await?;
+    let items_json: OpggResponse<OpggItemData> = items_resp.json().await?;
     
     // Parse combination_items and single_items from /builds
-    let combination_items: Vec<DepthGroup> = builds_json
-        .get("data")
-        .and_then(|d| d.get("combination_items"))
-        .and_then(|c| serde_json::from_value(c.clone()).ok())
-        .unwrap_or_default();
+    let combination_items: Vec<DepthGroup> = builds_json.data.combination_items;
     
-    let single_items: Vec<DepthGroup> = builds_json
-        .get("data")
-        .and_then(|d| d.get("single_items"))
-        .and_then(|s| serde_json::from_value(s.clone()).ok())
-        .unwrap_or_default();
+    let single_items: Vec<DepthGroup> = builds_json.data.single_items;
     
     if combination_items.is_empty() {
         return Ok(vec![]);
@@ -167,17 +397,9 @@ async fn build_champion_position(
     let mid_items = get_items_by_depth(&single_items, 3);
     
     // Parse boots and starter items from /items
-    let official_boots: Vec<BuildItem> = items_json
-        .get("data")
-        .and_then(|d| d.get("boots"))
-        .and_then(|b| serde_json::from_value(b.clone()).ok())
-        .unwrap_or_default();
+    let official_boots: Vec<BuildItem> = items_json.data.boots;
     
-    let official_starters: Vec<BuildItem> = items_json
-        .get("data")
-        .and_then(|d| d.get("starter_items"))
-        .and_then(|s| serde_json::from_value(s.clone()).ok())
-        .unwrap_or_default();
+    let official_starters: Vec<BuildItem> = items_json.data.starter_items;
     
     let num_builds = max_builds.min(full_builds.len());
     let mut results = Vec::new();
@@ -295,219 +517,5 @@ async fn build_champion_position(
         });
     }
     
-    Ok(results)
-}
-
-/// Get all Summoner's Rift builds from OP.GG
-pub async fn get_sr(client: &Client) -> Result<Vec<BuildResult>> {
-    let version = get_version(client).await?;
-    let headers = create_headers();
-    
-    log::info!("OP.GG: Using version {}", version);
-    
-    // Get list of all champions
-    let response = client
-        .get("https://lol-api-champion.op.gg/api/euw/champions/ranked")
-        .headers(headers)
-        .send()
-        .await?;
-    
-    let data: Value = response.json().await?;
-    let champs_data = data
-        .get("data")
-        .and_then(|d| d.as_array())
-        .context("Invalid champions data")?;
-    
-    let mut results = Vec::new();
-    
-    for champ in champs_data {
-        let id = champ.get("id").and_then(|i| i.as_i64()).unwrap_or_default();
-        let name = champ.get("name").and_then(|n| n.as_str()).unwrap_or_default();
-        
-        let positions: Vec<String> = champ
-            .get("positions")
-            .and_then(|p| p.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
-        
-        if positions.is_empty() || id == 0 {
-            continue;
-        }
-        
-        log::debug!("Processing OP.GG: {} (ID: {})", name, id);
-        
-        for position in &positions {
-            match build_champion_position(client, id, name, position, &version, 2).await {
-                Ok(builds) => {
-                    results.extend(builds);
-                }
-                Err(e) => {
-                    log::warn!("Failed to get builds for {} {}: {}", name, position, e);
-                }
-            }
-            
-            // Small delay to avoid rate limiting
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
-    }
-    
-    log::info!("OP.GG: Fetched {} builds", results.len());
-    Ok(results)
-}
-
-/// Get ARAM builds from OP.GG
-/// TODO: Integrate with import_builds when aram option is enabled
-#[allow(dead_code)]
-pub async fn get_aram(client: &Client) -> Result<Vec<BuildResult>> {
-    let version = get_version(client).await?;
-    let headers = create_headers();
-    
-    log::info!("OP.GG ARAM: Using version {}", version);
-    
-    // Get list of all champions for ARAM
-    let response = client
-        .get("https://lol-api-champion.op.gg/api/euw/champions/aram")
-        .headers(headers.clone())
-        .send()
-        .await?;
-    
-    let data: Value = response.json().await?;
-    let champs_data = data
-        .get("data")
-        .and_then(|d| d.as_array())
-        .context("Invalid ARAM champions data")?;
-    
-    let mut results = Vec::new();
-    
-    for champ in champs_data {
-        let id = champ.get("id").and_then(|i| i.as_i64()).unwrap_or_default();
-        let name = champ.get("name").and_then(|n| n.as_str()).unwrap_or_default();
-        
-        if id == 0 {
-            continue;
-        }
-        
-        // Fetch ARAM builds
-        let builds_url = format!(
-            "https://lol-api-champion.op.gg/api/euw/champions/aram/{}/NONE/builds",
-            id
-        );
-        
-        let builds_resp = match client.get(&builds_url).headers(headers.clone()).send().await {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-        
-        let builds_json: Value = match builds_resp.json().await {
-            Ok(j) => j,
-            Err(_) => continue,
-        };
-        
-        // Fetch items
-        let items_url = format!(
-            "https://lol-api-champion.op.gg/api/euw/champions/aram/{}/NONE/items",
-            id
-        );
-        
-        let items_resp = match client.get(&items_url).headers(headers.clone()).send().await {
-            Ok(r) => r,
-            Err(_) => continue,
-        };
-        
-        let items_json: Value = match items_resp.json().await {
-            Ok(j) => j,
-            Err(_) => continue,
-        };
-        
-        // Parse builds (similar logic to SR)
-        let combination_items: Vec<DepthGroup> = builds_json
-            .get("data")
-            .and_then(|d| d.get("combination_items"))
-            .and_then(|c| serde_json::from_value(c.clone()).ok())
-            .unwrap_or_default();
-        
-        if combination_items.is_empty() {
-            continue;
-        }
-        
-        let max_depth = combination_items.iter().map(|d| d.depth).max().unwrap_or(0);
-        
-        let empty_builds: Vec<BuildItem> = vec![];
-        let full_builds = combination_items
-            .iter()
-            .find(|d| d.depth == max_depth)
-            .map(|d| &d.items)
-            .unwrap_or(&empty_builds);
-        
-        if full_builds.is_empty() {
-            continue;
-        }
-        
-        // Get first build only for ARAM
-        let build_data = &full_builds[0];
-        if build_data.ids.is_empty() {
-            continue;
-        }
-        
-        let mut blocks = Vec::new();
-        
-        // Starter items
-        if let Some(starters) = items_json.get("data").and_then(|d| d.get("starter_items")) {
-            let starters: Vec<BuildItem> = serde_json::from_value(starters.clone()).unwrap_or_default();
-            if !starters.is_empty() {
-                let starter_items: Vec<Item> = starters[0]
-                    .ids
-                    .iter()
-                    .map(|id| Item { id: id.to_string(), count: 1 })
-                    .collect();
-                
-                if !starter_items.is_empty() {
-                    blocks.push(ItemBlock {
-                        block_type: "Starter Items".to_string(),
-                        items: starter_items,
-                    });
-                }
-            }
-        }
-        
-        // Full build items
-        let full_items: Vec<Item> = build_data
-            .ids
-            .iter()
-            .map(|id| Item { id: id.to_string(), count: 1 })
-            .collect();
-        
-        if !full_items.is_empty() {
-            blocks.push(ItemBlock {
-                block_type: "Full Build".to_string(),
-                items: full_items,
-            });
-        }
-        
-        if !blocks.is_empty() {
-            let title = format!("OPGG ARAM {} - {}", name, version);
-            
-            results.push(BuildResult {
-                champ: name.to_string(),
-                file_prefix: "aram".to_string(),
-                riot_json: RiotJsonSR {
-                    champion: name.to_string(),
-                    title,
-                    blocks,
-                    map: Some("HA".to_string()),
-                },
-                source: "opgg".to_string(),
-            });
-        }
-        
-        // Rate limiting
-        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
-    }
-    
-    log::info!("OP.GG ARAM: Fetched {} builds", results.len());
     Ok(results)
 }

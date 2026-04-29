@@ -34,9 +34,11 @@ pub async fn get_version(client: &Client) -> Result<String> {
         .await?;
     
     let data: Value = response.json().await?;
+    // log the data for debugging
+    let _ = serde_json::to_string_pretty(&data).map(|s| println!("Version Data: {}", s));
     let version = data
         .get("patches")
-        .and_then(|p| p.get(0))
+        .and_then(|p| p.get("0"))
         .and_then(|p| p.get("patchVersion"))
         .and_then(|v| v.as_str())
         .context("Version not found")?;

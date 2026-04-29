@@ -2,68 +2,34 @@
 use thiserror::Error;
 use serde::{Deserialize, Serialize};
 
-#[allow(dead_code)] // Variants for future use
-#[derive(Error, Debug)]
-pub enum ChampionifyError {
-    #[error("Network error: {0}")]
-    Network(String),
-    
-    #[error("Parse error: {0}")]
-    Parse(String),
-    
+#[derive(Debug, Error)]
+pub enum AppError {
+
+    #[error("Anyhow error: {0}")]
+    AnyhowError(#[from] anyhow::Error),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
-    #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
-    
+    #[error("Parse error: {0}")]
+    Parse(String),
     #[error("Path not found: {0}")]
     PathNotFound(String),
-    
-    #[error("Invalid configuration: {0}")]
+    #[error("Config error: {0}")]
     Config(String),
-    
     #[error("Scraper error: {0}")]
     Scraper(String),
-    
-    #[error("Unknown error: {0}")]
-    Unknown(String),
+    #[error("Reqwest error: {0}")]
+    Reqwest(#[from] reqwest::Error),
+    #[error("Serde JSON error: {0}")]
+    SerdeJson(#[from] serde_json::Error),
+    #[error("Custom error: {0}")]
+    Custom(String),
 }
 
-impl From<reqwest::Error> for ChampionifyError {
-    fn from(err: reqwest::Error) -> Self {
-        ChampionifyError::Network(err.to_string())
-    }
-}
-
-pub type Result<T> = std::result::Result<T, ChampionifyError>;
-
-/// Error response for frontend
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ErrorResponse {
-    pub code: String,
-    pub message: String,
-    pub details: Option<String>,
-}
-
-impl From<ChampionifyError> for ErrorResponse {
-    fn from(err: ChampionifyError) -> Self {
-        let (code, message) = match &err {
-            ChampionifyError::Network(msg) => ("NETWORK_ERROR", msg.clone()),
-            ChampionifyError::Parse(msg) => ("PARSE_ERROR", msg.clone()),
-            ChampionifyError::Io(err) => ("IO_ERROR", err.to_string()),
-            ChampionifyError::Json(err) => ("JSON_ERROR", err.to_string()),
-            ChampionifyError::PathNotFound(msg) => ("PATH_NOT_FOUND", msg.clone()),
-            ChampionifyError::Config(msg) => ("CONFIG_ERROR", msg.clone()),
-            ChampionifyError::Scraper(msg) => ("SCRAPER_ERROR", msg.clone()),
-            ChampionifyError::Unknown(msg) => ("UNKNOWN_ERROR", msg.clone()),
-        };
-        
-        ErrorResponse {
-            code: code.to_string(),
-            message,
-            details: None,
-        }
+impl Serialize for AppError {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<<S as serde::Serializer>::Ok, <S as serde::Serializer>::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
     }
 }

@@ -1,9 +1,11 @@
 // Item sets module - generates and writes LoL item set JSON files
-use crate::error::Result;
+use crate::error::AppError;
 use crate::scrapers::types::{Build, Item, ItemBlock};
 use serde::{Deserialize, Serialize};
-use std::fs;
+use tokio::fs;
 use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 /// Full Riot Games item set format with all official fields
 #[derive(Debug, Serialize, Deserialize)]
@@ -83,46 +85,46 @@ pub fn build_to_item_set(build: &Build) -> ItemSet {
 }
 
 /// Write an item set to disk in League of Legends format
-pub fn write_item_set(
-    item_sets_path: &Path,
-    champion: &str,
-    build_index: usize,
-    item_set: &ItemSet,
-) -> Result<()> {
-    // Create champion directory structure
-    let recommended_dir = item_sets_path
-        .join(champion)
-        .join("Recommended");
-    
-    fs::create_dir_all(&recommended_dir)?;
-    
-    // Generate filename
-    let filename = format!("Championify_{}.json", build_index);
-    let file_path = recommended_dir.join(filename);
-    
-    // Write JSON
-    let json = serde_json::to_string_pretty(item_set)?;
-    fs::write(&file_path, json)?;
-    
-    log::info!("Wrote item set to {:?}", file_path);
+pub async fn write_item_set(
+    dir_path: &Path, 
+    champion: &str, 
+    index: usize, 
+    item_set: &ItemSet
+) -> Result<(), AppError> {
+    let file_name = format!("{}_{}.json", champion, index);
+    let file_path = dir_path.join(file_name);
+
+    let json_bytes = serde_json::to_vec(item_set)
+        .map_err(|e| AppError::Parse(format!("Failed to serialize {}: {}", champion, e)))?;
+
+    fs::write(&file_path, json_bytes)
+        .await
+        .map_err(|e| AppError::Io(e))?;
+
     Ok(())
 }
 
 /// Delete all Championify item sets for a champion
-pub fn delete_champion_builds(item_sets_path: &Path, champion: &str) -> Result<()> {
+pub async fn delete_champion_builds(item_sets_path: &Path, champion: &str) -> Result<(), AppError> {
     let recommended_dir = item_sets_path.join(champion).join("Recommended");
     
-    if !recommended_dir.exists() {
-        return Ok(());
-    }
-    
-    for entry in fs::read_dir(&recommended_dir)?.flatten() {
+    let mut dir_entries = match fs::read_dir(&recommended_dir).await {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(AppError::Io(e)),
+    };
+
+    while let Some(entry) = dir_entries.next_entry().await? {
         let path = entry.path();
-        if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-            if filename.starts_with("Championify_") && filename.ends_with(".json") {
-                fs::remove_file(&path)?;
-                log::info!("Deleted item set: {:?}", path);
-            }
+        
+        let is_target_file = path.file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name.starts_with("Championify_") && name.ends_with(".json"))
+            .unwrap_or(false);
+
+        if is_target_file {
+            fs::remove_file(&path).await?;
+            log::debug!("Deleted item set: {:?}", path);
         }
     }
     
@@ -130,46 +132,69 @@ pub fn delete_champion_builds(item_sets_path: &Path, champion: &str) -> Result<(
 }
 
 /// Delete all Championify item sets for all champions
-pub fn delete_all_builds(item_sets_path: &Path) -> Result<()> {
-    if !item_sets_path.exists() {
-        return Ok(());
-    }
+pub async fn delete_all_builds(item_sets_path: &Path) -> Result<(), AppError> {
+    let mut dir_entries = match fs::read_dir(item_sets_path).await {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(AppError::Io(e)),
+    };
     
-    for entry in fs::read_dir(item_sets_path)?.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            if let Some(champion) = path.file_name().and_then(|f| f.to_str()) {
-                delete_champion_builds(item_sets_path, champion)?;
+    let semaphore = Arc::new(Semaphore::new(10));
+    let mut deletion_tasks = Vec::new();
+
+    while let Some(entry) = dir_entries.next_entry().await? {
+        if entry.file_type().await?.is_dir() {
+            if let Some(champion_name) = entry.file_name().to_str() {
+                let item_sets_path_clone = item_sets_path.to_path_buf();
+                let champion_name_clone = champion_name.to_string();
+                
+                let permit = semaphore.clone().acquire_owned().await
+                    .expect("Semaphore closed"); 
+
+                deletion_tasks.push(tokio::spawn(async move {
+                    let res = delete_champion_builds(&item_sets_path_clone, &champion_name_clone).await;
+                    drop(permit);
+                    res
+                }));
             }
         }
     }
-    
+
+    for task in deletion_tasks {
+        match task.await {
+            Ok(Ok(())) => {} // Succès total
+            Ok(Err(app_err)) => log::error!("Failed to delete item sets: {}", app_err), // Erreur métier (AppError)
+            Err(join_err) => log::error!("Task panicked or cancelled: {}", join_err),   // Erreur Tokio (JoinError)
+        }
+    }
+
     log::info!("Deleted all Championify item sets");
     Ok(())
 }
 
 /// Count existing Championify item sets
-pub fn count_builds(item_sets_path: &Path) -> Result<usize> {
-    if !item_sets_path.exists() {
-        return Ok(0);
-    }
-    
+pub async fn count_builds(item_sets_path: &Path) -> Result<usize, AppError> {
     let mut count = 0;
     
-    for entry in fs::read_dir(item_sets_path)?.flatten() {
+    let mut dir_entries = match fs::read_dir(item_sets_path).await {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(AppError::Io(e)),
+    };
+
+    while let Some(entry) = dir_entries.next_entry().await? {
         let champion_dir = entry.path().join("Recommended");
-        if champion_dir.exists() {
-            if let Ok(files) = fs::read_dir(&champion_dir) {
-                count += files
-                    .flatten()
-                    .filter(|file| {
-                        file.path()
-                            .file_name()
-                            .and_then(|f| f.to_str())
-                            .map(|name| name.starts_with("Championify_") && name.ends_with(".json"))
-                            .unwrap_or(false)
-                    })
-                    .count();
+        
+        if let Ok(mut files) = fs::read_dir(&champion_dir).await {
+            while let Some(file) = files.next_entry().await? {
+                let is_target = file.file_name()
+                    .to_str()
+                    .map(|name| name.starts_with("Championify_") && name.ends_with(".json"))
+                    .unwrap_or(false);
+
+                if is_target {
+                    count += 1;
+                }
             }
         }
     }

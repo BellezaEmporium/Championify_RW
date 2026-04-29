@@ -1,5 +1,5 @@
 // Preferences module - manages user preferences and settings
-use crate::error::{ChampionifyError, Result};
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -143,22 +143,22 @@ impl From<Preferences> for PreferencesUI {
 
 impl Preferences {
     /// Get the preferences file path
-    fn get_prefs_path() -> Result<PathBuf> {
+    fn get_prefs_path() -> Result<PathBuf, AppError> {
         let config_dir = dirs::config_dir()
-            .ok_or_else(|| ChampionifyError::Config("Could not find config directory".to_string()))?;
+            .ok_or_else(|| AppError::Config("Could not find config directory".to_string()))?;
         
         let app_dir = config_dir.join("championify");
         
         // Create directory if it doesn't exist
         if !app_dir.exists() {
-            fs::create_dir_all(&app_dir)?;
+            fs::create_dir_all(&app_dir).map_err(|e| AppError::Config(format!("Failed to create config directory: {}", e)))?;
         }
         
         Ok(app_dir.join("prefs.json"))
     }
     
     /// Load preferences from disk
-    pub fn load() -> Result<Self> {
+    pub fn load() -> Result<Self, AppError> {
         let path = Self::get_prefs_path()?;
         
         if !path.exists() {
@@ -174,7 +174,7 @@ impl Preferences {
     }
     
     /// Save preferences to disk
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> Result<(), AppError> {
         let path = Self::get_prefs_path()?;
         let json = serde_json::to_string_pretty(self)?;
         
@@ -185,19 +185,19 @@ impl Preferences {
     }
     
     /// Load as UI format (for frontend)
-    pub fn load_ui() -> Result<PreferencesUI> {
+    pub fn load_ui() -> Result<PreferencesUI, AppError> {
         Ok(Self::load()?.into())
     }
     
     /// Save from UI format (from frontend)
-    pub fn save_ui(ui_prefs: PreferencesUI) -> Result<()> {
+    pub fn save_ui(ui_prefs: PreferencesUI) -> Result<(), AppError> {
         let prefs: Preferences = ui_prefs.into();
         prefs.save()
     }
     
     /// Update a specific preference field
     #[allow(dead_code)]
-    pub fn update_field(&mut self, field: &str, value: serde_json::Value) -> Result<()> {
+    pub fn update_field(&mut self, field: &str, value: serde_json::Value) -> Result<(), AppError> {
         match field {
             "locale" => {
                 if let Some(s) = value.as_str() {
@@ -256,7 +256,7 @@ impl Preferences {
                 }
             }
             _ => {
-                return Err(ChampionifyError::Config(format!("Unknown preference field: {}", field)));
+                return Err(AppError::Config(format!("Unknown preference field: {}", field)));
             }
         }
         
