@@ -1,5 +1,7 @@
 //Base for anything Riot CDN related
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde_json::Value;
@@ -7,6 +9,7 @@ use serde_json::Value;
 pub async fn get_riot_version(client: &Client) -> Result<String> {
     let response = client
         .get("https://ddragon.leagueoflegends.com/api/versions.json")
+        .timeout(Duration::from_secs(10))
         .send()
         .await?;
     
@@ -24,7 +27,7 @@ pub async fn get_riot_champions(client: &Client, version: &str) -> Result<Value>
         version
     );
     
-    let response = client.get(&url).send().await?;
+    let response = client.get(&url).timeout(Duration::from_secs(10)).send().await?;
     let riot_json: Value = response.json().await?;
     
     Ok(riot_json)
@@ -36,7 +39,7 @@ pub async fn get_riot_items(client: &Client, version: &str) -> Result<Value> {
         version
     );
     
-    let response = client.get(&url).send().await?;
+    let response = client.get(&url).timeout(Duration::from_secs(10)).send().await?;
     let riot_json: Value = response.json().await?;
     
     Ok(riot_json)

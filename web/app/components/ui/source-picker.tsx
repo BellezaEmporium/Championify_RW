@@ -2,15 +2,39 @@
 
 import { useTranslations } from 'next-intl';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { useEffect, useMemo } from 'react';
 import { useAppState, useAppDispatch } from '../../context/app-context';
 import { SOURCES } from '../../lib/sources';
 
 export default function SourcePicker() {
   const t = useTranslations();
-  const { preferences } = useAppState();
+  const { preferences, scraperStatuses } = useAppState();
   const dispatch = useAppDispatch();
 
   const selected = preferences.sr_source || [];
+  const unavailableSourceIds = useMemo(() => {
+    return new Set(
+      scraperStatuses
+        .filter(status => {
+          const versionText = status.retrieved_value?.toLowerCase() || '';
+          const saysUnavailable =
+            versionText.includes('unavailable') || versionText.includes('indisponible');
+          return status.status === 'Down' || saysUnavailable;
+        })
+        .map(status => status.id)
+    );
+  }, [scraperStatuses]);
+
+  const isUnavailable = (sourceId: string) => {
+    return unavailableSourceIds.has(sourceId);
+  };
+
+  useEffect(() => {
+    const filtered = selected.filter(sourceId => !isUnavailable(sourceId));
+    if (filtered.length !== selected.length) {
+      dispatch({ type: 'UPDATE_PREFERENCE', payload: { sr_source: filtered } });
+    }
+  }, [selected, unavailableSourceIds, dispatch]);
 
   const toggleSource = (sourceId: string) => {
     const newSources = selected.includes(sourceId)
@@ -48,14 +72,18 @@ export default function SourcePicker() {
             className="w-[var(--radix-dropdown-menu-trigger-width)] bg-slate-900/90 border border-white/12 rounded-lg shadow-2xl overflow-hidden z-50"
             sideOffset={8}
           >
-            {SOURCES.map(source => (
+            {SOURCES.map(source => {
+              const disabled = isUnavailable(source.id);
+              return (
               <DropdownMenu.Item
                 key={source.id}
+                disabled={disabled}
                 className={`px-3 py-2 flex items-center gap-2 text-slate-200 hover:bg-sky-500/15 hover:text-white cursor-pointer transition-colors text-sm outline-none ${
                   selected.includes(source.id) ? 'bg-blue-500/15' : ''
-                }`}
+                } ${disabled ? 'opacity-45 cursor-not-allowed hover:bg-transparent hover:text-slate-400' : ''}`}
                 onSelect={e => {
                   e.preventDefault();
+                  if (disabled) return;
                   toggleSource(source.id);
                 }}
               >
@@ -77,7 +105,8 @@ export default function SourcePicker() {
                   </svg>
                 )}
               </DropdownMenu.Item>
-            ))}
+               );
+            })}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>

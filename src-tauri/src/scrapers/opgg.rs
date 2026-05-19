@@ -10,11 +10,12 @@ use reqwest::{Client, header};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashSet;
-use crate::riot_cdn::get_riot_version;
 use crate::scrapers::{BuildScraper, ScraperContext, ScraperHealth};
 use crate::AppError;
 
 use super::types::{SourceInfo, ItemBlock, Item, RiotJsonSR, BuildResult};
+
+const RATE_LIMIT_MS: u64 = 50;
 
 pub struct OpggScraper;
 
@@ -106,7 +107,7 @@ impl BuildScraper for OpggScraper {
         
         Ok(version.to_string())
     }
-    async fn get_sr(&self, client: &Client, context: &ScraperContext, _role: Option<&str>) -> Result<Vec<BuildResult>, AppError> {
+    async fn get_sr(&self, client: &Client, _context: &ScraperContext, _role: Option<&str>) -> Result<Vec<BuildResult>, AppError> {
         let version = self.get_version(client).await?;
         let headers = create_headers();
         
@@ -136,7 +137,11 @@ impl BuildScraper for OpggScraper {
                 .and_then(|p| p.as_array())
                 .map(|arr| {
                     arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
+                        .filter_map(|obj| {
+                            obj.get("name")
+                                .and_then(|n| n.as_str())
+                                .map(String::from)
+                        })
                         .collect()
                 })
                 .unwrap_or_default();
@@ -158,14 +163,14 @@ impl BuildScraper for OpggScraper {
                 }
                 
                 // Small delay to avoid rate limiting
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                tokio::time::sleep(std::time::Duration::from_millis(RATE_LIMIT_MS)).await;
             }
         }
         
         log::info!("OP.GG: Fetched {} builds", results.len());
         Ok(results)
     }
-    async fn get_aram(&self, client: &Client, context: &ScraperContext) -> Result<Vec<BuildResult>, AppError> {
+    async fn get_aram(&self, client: &Client, _context: &ScraperContext) -> Result<Vec<BuildResult>, AppError> {
         let version = self.get_version(client).await?;
         let headers = create_headers();
         
@@ -202,10 +207,19 @@ impl BuildScraper for OpggScraper {
             
             let builds_resp = match client.get(&builds_url).headers(headers.clone()).send().await {
                 Ok(r) => r,
-                Err(_) => continue,
+                Err(e) => {
+                    log::error!("Request error for {}: {}", name, e);
+                    continue;
+                }
             };
             
-            let builds_json: OpggResponse<OpggBuildData> = builds_resp.json().await?;
+            let builds_json: OpggResponse<OpggBuildData> = match builds_resp.json().await {
+                Ok(j) => j,
+                Err(e) => {
+                    log::error!("JSON parse error for {}: {}", name, e);
+                    continue;
+                }
+            };
             
             // Fetch items
             let items_url = format!(
@@ -215,12 +229,18 @@ impl BuildScraper for OpggScraper {
             
             let items_resp = match client.get(&items_url).headers(headers.clone()).send().await {
                 Ok(r) => r,
-                Err(_) => continue,
+                Err(e) => {
+                    log::error!("Request error for {}: {}", name, e);
+                    continue;
+                }
             };
             
             let items_json: OpggResponse<OpggItemData> = match items_resp.json().await {
                 Ok(j) => j,
-                Err(_) => continue,
+                Err(e) => {
+                    log::error!("JSON parse error for {}: {}", name, e);
+                    continue;
+                }
             };
             
             // Parse builds (similar logic to SR)
@@ -297,18 +317,20 @@ impl BuildScraper for OpggScraper {
             }
             
             // Rate limiting
-            tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(RATE_LIMIT_MS)).await;
         }
         
         log::info!("OP.GG ARAM: Fetched {} builds", results.len());
         Ok(results)
     }
     async fn check_health(&self, client: &Client) -> ScraperHealth {
-        if self.get_version(client).await.is_ok() {
-            ScraperHealth::Available
-        } else {
-            ScraperHealth::Down
+        match self.get_version(client).await {
+            Ok(_) => ScraperHealth::Available,
+            Err(_) => ScraperHealth::Down,
         }
+    }
+    async fn needs_riot_version(&self) -> bool {
+        false
     }
 }
 

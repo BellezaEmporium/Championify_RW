@@ -1,16 +1,15 @@
+use async_trait::async_trait;
 use reqwest::{Client, header};
 use serde_json::Value;
-use anyhow::{Result, Context};
+use anyhow::Context;
+use crate::scrapers::{BuildScraper, registry::ScraperHealth};
+use crate::error::AppError;
+
 use super::{SourceInfo, ItemBlock, Item, RiotJsonSR, BuildResult};
 
 const API_KEY: &str = "QmFzaWMga2ItZnJvbnRlbmQgVDNNMWV3dUhqMlF3c1dC";
 
-pub fn source_info() -> SourceInfo {
-    SourceInfo {
-        name: "KoreanBuilds".to_string(),
-        id: "koreanbuilds".to_string(),
-    }
-}
+pub struct KoreanBuildsScraper;
 
 fn create_headers() -> header::HeaderMap {
     let mut headers = header::HeaderMap::new();
@@ -25,89 +24,6 @@ fn create_headers() -> header::HeaderMap {
     headers
 }
 
-pub async fn get_version(client: &Client) -> Result<String> {
-    let headers = create_headers();
-    let response = client
-        .get("https://api.koreanbuilds.net/champions?patchid=-1")
-        .headers(headers)
-        .send()
-        .await?;
-    
-    let data: Value = response.json().await?;
-    // log the data for debugging
-    let _ = serde_json::to_string_pretty(&data).map(|s| println!("Version Data: {}", s));
-    let version = data
-        .get("patches")
-        .and_then(|p| p.get("0"))
-        .and_then(|p| p.get("patchVersion"))
-        .and_then(|v| v.as_str())
-        .context("Version not found")?;
-    
-    Ok(version.to_string())
-}
-
-pub async fn get_sr(client: &Client) -> Result<Vec<BuildResult>> {
-    let version = get_version(client).await?;
-    let headers = create_headers();
-    
-    let response = client
-        .get("https://api.koreanbuilds.net/champions?patchid=-1")
-        .headers(headers.clone())
-        .send()
-        .await?;
-    
-    let data: Value = response.json().await?;
-    let champions = data
-        .get("champions")
-        .and_then(|c| c.as_array())
-        .context("No champions found")?;
-    
-    let mut results = Vec::new();
-    
-    for champ in champions {
-        let name = champ.get("name").and_then(|n| n.as_str()).unwrap_or_default();
-        let id = champ.get("id").and_then(|i| i.as_u64()).unwrap_or_default();
-        
-        if id == 0 {
-            continue;
-        }
-        
-        println!("Processing KoreanBuilds: {}", name);
-        
-        // Extract roles from builds
-        let roles = extract_roles(champ);
-        
-        for role in &roles {
-            let build_url = format!(
-                "https://api.koreanbuilds.net/builds?chmpname={}&patchid=-1",
-                name
-            );
-            
-            match client.get(&build_url).headers(headers.clone()).send().await {
-                Ok(resp) => {
-                    if let Ok(build_data) = resp.json::<Value>().await {
-                        let blocks = parse_builds(&build_data);
-                        
-                        results.push(BuildResult {
-                            champ: name.to_string(),
-                            file_prefix: role.to_lowercase(),
-                            riot_json: RiotJsonSR {
-                                champion: name.to_string(),
-                                title: format!("KRB {} {}", role, version),
-                                blocks,
-                                map: None
-                            },
-                            source: "koreanbuilds".to_string(),
-                        });
-                    }
-                }
-                Err(e) => eprintln!("Error fetching builds for {}: {}", name, e),
-            }
-        }
-    }
-    
-    Ok(results)
-}
 
 fn extract_roles(champ: &Value) -> Vec<String> {
     if let Some(builds) = champ.get("builds").and_then(|b| b.as_object()) {
@@ -157,4 +73,112 @@ fn parse_builds(build_data: &Value) -> Vec<ItemBlock> {
     }
     
     blocks
+}
+
+#[async_trait]
+impl BuildScraper for KoreanBuildsScraper {
+    fn source_info(&self) -> SourceInfo {
+        SourceInfo {
+            name: "KoreanBuilds".to_string(),
+            id: "koreanbuilds".to_string(),
+        }
+    }
+
+    async fn get_version(&self, client: &Client) -> Result<String, AppError> {
+        let headers = create_headers();
+        let response = client
+            .get("https://api.koreanbuilds.net/champions?patchid=-1")
+            .headers(headers)
+            .send()
+            .await?;
+        
+        let data: Value = response.json().await?;
+        let patches = data.get("patches").context("Patches not found")?;
+        let version = patches
+            .get(0)
+            .or_else(|| patches.get("0"))
+            .and_then(|p| p.get("patchVersion"))
+            .and_then(|v| v.as_str())
+            .context("Version not found in patches[0].patchVersion")?;
+        
+        Ok(version.to_string())
+    }
+
+    async fn get_sr(&self, client: &Client, _context: &crate::scrapers::ScraperContext, _role: Option<&str>) -> Result<Vec<BuildResult>, AppError> {
+        let version = self.get_version(client).await?;
+        let headers = create_headers();
+
+        let response = client
+            .get("https://api.koreanbuilds.net/champions?patchid=-1")
+            .headers(headers.clone())
+            .send()
+            .await?;
+
+        let data: Value = response.json().await?;
+        let champions = data
+            .get("champions")
+            .and_then(|c| c.as_array())
+            .context("No champions found")?;
+
+        let mut results = Vec::new();
+
+        for champ in champions {
+            let name = champ
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or_default();
+            let id = champ.get("id").and_then(|i| i.as_u64()).unwrap_or_default();
+
+            if id == 0 {
+                continue;
+            }
+
+            println!("Processing KoreanBuilds: {}", name);
+
+            let roles = extract_roles(champ);
+
+            for role in &roles {
+                let build_url = format!(
+                    "https://api.koreanbuilds.net/builds?chmpname={}&patchid=-1",
+                    name
+                );
+
+                match client.get(&build_url).headers(headers.clone()).send().await {
+                    Ok(resp) if resp.status().is_success() => {
+                        match resp.json::<Value>().await {
+                            Ok(build_data) => {
+                                let blocks = parse_builds(&build_data);
+
+                                results.push(BuildResult {
+                                    champ: name.to_string(),
+                                    file_prefix: role.to_lowercase(),
+                                    riot_json: RiotJsonSR {
+                                        champion: name.to_string(),
+                                        title: format!("KRB {} {}", role, version),
+                                        blocks,
+                                        map: None,
+                                    },
+                                    source: "koreanbuilds".to_string(),
+                                });
+                            }
+                        Err(e) => log::error!("JSON parse error for {}: {}", name, e),
+                        }
+                    }
+                Ok(resp) => log::error!("HTTP error for {}: {}", name, resp.status()),
+                Err(e) => log::error!("Request error for {}: {}", name, e),
+                }
+            }
+        }
+
+        Ok(results)
+    }
+    async fn check_health(&self, client: &Client) -> ScraperHealth {
+        match self.get_version(client).await {
+            Ok(_) => ScraperHealth::Available,
+            Err(_) => ScraperHealth::Down,
+        }
+    }
+    async fn needs_riot_version(&self) -> bool {
+        false
+    }
 }

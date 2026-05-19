@@ -13,12 +13,11 @@
     "moduleResolution": "nodenext",
     "allowSyntheticDefaultImports": true,
     "noEmit": true,
-    "types": ["vitest/globals", "node", "jsdom"],
-    "baseUrl": ".",
+    "types": ["vitest/globals", "node"],
     "paths": {
-      "@/*": ["src/*"],
-      "@backend/*": ["backend/src/*"],
-      "@shared/*": ["shared/data/*"]
+      "@/*": ["./src/*"],
+      "@backend/*": ["./backend/src/*"],
+      "@shared/*": ["./shared/data/*"]
     }
   },
   "include": ["src/**/*", "tests/**/*", "backend/src/**/*", "shared/**/*", "vitest.config.js"],

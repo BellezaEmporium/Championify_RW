@@ -1,53 +1,75 @@
+use std::time::Duration;
+
+use async_trait::async_trait;
 use reqwest::Client;
 use serde_json::{json, Value};
 use anyhow::{Result, Context};
+use crate::{error::AppError, riot_cdn::get_riot_champions, scrapers::{BuildScraper, ScraperContext, registry::ScraperHealth}};
+
 use super::{SourceInfo, ItemBlock, Item, RiotJsonSR, BuildResult, Champion};
 
-pub fn source_info() -> SourceInfo {
-    SourceInfo {
-        name: "ProBuilds".to_string(),
-        id: "probuilds".to_string(),
+pub struct ProBuildsScraper;
+
+#[async_trait]
+impl BuildScraper for ProBuildsScraper {
+
+    fn source_info(&self) -> SourceInfo {
+        SourceInfo {
+            name: "ProBuilds".to_string(),
+            id: "probuilds".to_string(),
+        }
+    }
+
+    async fn get_version(&self, client: &Client) -> Result<String, AppError> {
+        let response = client
+            .get("https://utils.iesdev.com/static/json/lol/riot/versions")
+            .header("Content-Type", "application/json")
+            .timeout(Duration::from_secs(10))
+            .send()
+            .await?;
+        
+        let versions: Vec<String> = response.json().await?;
+        Ok(versions.first().cloned().unwrap_or_default())
+    }
+
+    async fn get_sr(&self, client: &Client, context: &ScraperContext, _role: Option<&str>) -> Result<Vec<BuildResult>, AppError> {
+        let positions = ["TOP", "JUNGLE", "MID", "BOT", "SUPPORT"];
+        let version = context.riot_version.clone();
+        let champions = get_riot_champions(client, &version).await?;
+        
+        let mut results = Vec::new();
+        
+        for champion_value in champions.as_array().context("Champions is not an array")? {
+            let champion: Champion = match serde_json::from_value(champion_value.clone()) {
+                Ok(champ) => champ,
+                Err(e) => {
+                    eprintln!("Failed to parse champion: {}", e);
+                    continue;
+                }
+            };
+
+            for position in &positions {
+                match get_items(client, &champion, position).await {
+                    Ok(build) => results.push(build),
+                    Err(e) => eprintln!("Error for {} {}: {}", champion.name, position, e),
+                }
+            }
+        }
+        
+        Ok(results)
+    }
+    async fn check_health(&self, client: &Client) -> ScraperHealth {
+        match self.get_version(client).await {
+            Ok(_) => ScraperHealth::Available,
+            Err(_) => ScraperHealth::Down,
+        }
+    }
+    async fn needs_riot_version(&self) -> bool {
+        false
     }
 }
 
-pub async fn get_version(client: &Client) -> Result<String> {
-    let response = client
-        .get("https://utils.iesdev.com/static/json/lol/riot/versions")
-        .header("Content-Type", "application/json")
-        .send()
-        .await?;
-    
-    let versions: Vec<String> = response.json().await?;
-    Ok(versions.first().cloned().unwrap_or_default())
-}
-
-async fn get_champs(client: &Client) -> Result<Vec<Champion>> {
-    let version = get_version(client).await?;
-    let url = format!(
-        "https://blitz-cdn-plain.blitz.gg/blitz/ddragon/{}/data/en_US/champions.json",
-        version
-    );
-    
-    let response = client.get(&url).send().await?;
-    let data: Value = response.json().await?;
-    
-    let champions = data
-        .get("champions")
-        .and_then(|c| c.as_array())
-        .context("No champions found")?;
-    
-    Ok(champions
-        .iter()
-        .filter_map(|champ| {
-            Some(Champion {
-                id: champ.get("key")?.as_str()?.to_string(),
-                name: champ.get("name")?.as_str()?.to_string(),
-            })
-        })
-        .collect())
-}
-
-async fn get_items(client: &Client, champion: &Champion, position: &str) -> Result<BuildResult> {
+async fn get_items(client: &Client, champion: &Champion, position: &str) -> Result<BuildResult, AppError> {
     println!("Processing ProBuilds: {} - {}", champion.name, position);
     
     let query = r#"
@@ -83,6 +105,9 @@ async fn get_items(client: &Client, champion: &Champion, position: &str) -> Resu
         .await?;
     
     let json: Value = response.json().await?;
+    if let Some(errors) = json.get("errors") {
+        return Err(AppError::Custom(format!("GraphQL errors: {}", errors)));
+    }
     let data_array = json
         .pointer("/data/executeDatabricksQuery/payload/result/dataArray")
         .and_then(|v| v.as_array())
@@ -132,22 +157,4 @@ async fn get_items(client: &Client, champion: &Champion, position: &str) -> Resu
         },
         source: "probuilds".to_string(),
     })
-}
-
-pub async fn get_sr(client: &Client) -> Result<Vec<BuildResult>> {
-    let positions = ["TOP", "JUNGLE", "MID", "BOT", "SUPPORT"];
-    let champions = get_champs(client).await?;
-    
-    let mut results = Vec::new();
-    
-    for champion in &champions {
-        for position in &positions {
-            match get_items(client, champion, position).await {
-                Ok(build) => results.push(build),
-                Err(e) => eprintln!("Error for {} {}: {}", champion.name, position, e),
-            }
-        }
-    }
-    
-    Ok(results)
 }

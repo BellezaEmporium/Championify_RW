@@ -61,7 +61,9 @@ export default function MainForm() {
   }, [browseTitle, dispatch, updatePref]);
 
   // Import builds
-  const handleImport = useCallback(async () => {
+ const handleImport = useCallback(async () => {
+    if (importing) return;
+
     const path = preferences.install_path;
     const sources = preferences.sr_source;
 
@@ -82,22 +84,20 @@ export default function MainForm() {
     dispatch({ type: 'CLEAR_LOG' });
     addLogEntry(dispatch, 'Starting import...', 'info');
 
-    // Listen for progress events
     let unlisten: (() => void) | null = null;
+
     try {
       unlisten = await listenToImportProgress(event => {
         let msg = '';
         if (event.status === 'fetching') {
           msg = `Fetching builds from ${event.source}...`;
-        } else if (event.status === 'writing') {
-          msg = `Writing builds for ${event.source} (${event.count})...`;
         } else if (event.status === 'complete') {
-          msg = `Finished ${event.source} (${event.count} builds).`;
+          msg = `Finished ${event.source} (${event.count ?? 0} builds).`;
         }
         if (msg) addLogEntry(dispatch, msg, 'info');
       });
     } catch {
-      // Not in Tauri context
+      // Not in Tauri context — safe to proceed without listener
     }
 
     try {
@@ -131,9 +131,9 @@ export default function MainForm() {
       dispatch({ type: 'SET_VIEW', payload: 'main' });
     } finally {
       setImporting(false);
-      if (unlisten) unlisten();
+      unlisten?.();
     }
-  }, [preferences, dispatch, t]);
+  }, [importing, preferences, dispatch, t]);
 
   // Delete builds
   const handleDelete = useCallback(async () => {
@@ -286,4 +286,3 @@ export default function MainForm() {
     </>
   );
 }
-

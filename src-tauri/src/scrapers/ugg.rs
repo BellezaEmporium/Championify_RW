@@ -80,11 +80,11 @@ impl BuildScraper for UggScraper {
         context: &ScraperContext,
         _role: Option<&str>,
     ) -> Result<Vec<BuildResult>, AppError> {
+        let version = &context.riot_version;
+        let champions = get_riot_champions(client, version).await?;
         // Basically, UGG has champions from Riot Games DDragon, so no need to fetch anything, just reuse Riot's CDN.
         let ugg_version = self.get_version(client).await?;
-        let resolved_riot_version = get_riot_version(client).await?;
-        let riot_champions_json = get_riot_champions(client, &resolved_riot_version).await?;
-        let champions = riot_champions_json
+        let champions = champions
             .get("data")
             .and_then(|d| d.as_object())
             .ok_or_else(|| AppError::Parse("Invalid UGG champions response".to_string()))?;
@@ -99,7 +99,7 @@ impl BuildScraper for UggScraper {
             
             println!("Processing UGG: {}", key);
             
-            let riot_ver_key = resolved_riot_version
+            let riot_ver_key = context.riot_version
                 .split('.')
                 .take(2)
                 .collect::<Vec<_>>()
@@ -157,12 +157,13 @@ impl BuildScraper for UggScraper {
         Ok(all_results)
     }
     async fn check_health(&self, client: &Client) -> ScraperHealth {
-        let url = "https://lol-api-champion.op.gg/api/meta/versions";
-        
-        match client.get(url).send().await {
-            Ok(resp) if resp.status().is_success() => ScraperHealth::Available,
-            _ => ScraperHealth::Down,
+        match self.get_version(client).await {
+            Ok(_) => ScraperHealth::Available,
+            Err(_) => ScraperHealth::Down,
         }
+    }
+    async fn needs_riot_version(&self) -> bool {
+        true
     }
 }
 

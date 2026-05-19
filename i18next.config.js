@@ -46,7 +46,7 @@ export default defineConfig({
     'zh-TW',
   ],
   extract: {
-    input: '(src/**/*.{js,marko})',
+    input: '(src/**/*.{js})',
     output: '(src/translations/*.json)'
   }
 });

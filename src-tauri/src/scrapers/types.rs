@@ -82,3 +82,19 @@ impl BuildResult {
         }
     }
 }
+
+// Supported maps for builds
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GameType {
+    SummonersRift,
+    Aram,
+}
+
+impl GameType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GameType::SummonersRift => "ranked_solo_5x5",
+            GameType::Aram => "aram",
+        }
+    }
+}

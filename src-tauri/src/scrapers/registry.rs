@@ -6,6 +6,12 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use futures::future::join_all;
 
+fn is_unavailable_marker(value: &str) -> bool {
+    let lowered = value.trim().to_lowercase();
+    lowered.contains("unavailable") || lowered.contains("indisponible")
+}
+
+
 /// High-level health indicator for a scraper/source.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ScraperHealth {
@@ -39,7 +45,6 @@ pub async fn collect_statuses(client: &Client) -> Vec<ScraperStatus> {
 }
 
 async fn check_single(client: &Client, info: &SourceInfo) -> ScraperStatus {
-    let started = Instant::now();
     let now = Utc::now();
 
     let (status, error_message, retrieved_value, latency_ms) = match SOURCES.get(info.id.as_str()) {
@@ -49,13 +54,30 @@ async fn check_single(client: &Client, info: &SourceInfo) -> ScraperStatus {
         // On récupère la version (qui agit aussi comme un test de connectivité)
         let version = scraper.get_version(client).await;
         
-        // On déduit le statut
-        let status = if version.is_ok() { ScraperHealth::Available } else { ScraperHealth::Down };
+                let version_value = version.ok().map(|v| v.to_string());
+        let status = match &version_value {
+            Some(value) if is_unavailable_marker(value) => ScraperHealth::Down,
+            Some(_) => ScraperHealth::Available,
+            None => ScraperHealth::Down,
+        };
+
+        let latency = if status == ScraperHealth::Available {
+            Some(started.elapsed().as_millis())
+        } else {
+            None
+        };
+
+        let error_message = if status == ScraperHealth::Down {
+            version_value
+                .as_ref()
+                .filter(|value| is_unavailable_marker(value))
+                .map(|_| "Source reported unavailable".to_string())
+        } else {
+            None
+        };
         
-        let latency = if status == ScraperHealth::Available { Some(started.elapsed().as_millis()) } else { None };
-        
-        (status, None, version.ok().map(|v| v.to_string()), latency)
-    }
+        (status, error_message, version_value, latency)    
+    },
         None => (ScraperHealth::Unknown, Some("Scraper not found".to_string()), None, None),
     };
 
